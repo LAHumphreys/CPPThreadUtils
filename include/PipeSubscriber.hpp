@@ -48,7 +48,8 @@ template <class Message>
 PipeSubscriber<Message>::PipeSubscriber(
     PipePublisher<Message>* _parent,
     size_t maxSize)
-        : onNotify(nullptr),
+        : notifyState(DISABLED),
+          onNotify(nullptr),
           targetToNotify(nullptr),
           onNewMessage(nullptr),
           batching(false),
@@ -56,7 +57,6 @@ PipeSubscriber<Message>::PipeSubscriber(
           messages(maxSize)
 {
     forwardMessage = false;
-    notifyOnMessage = false;
 }
 
 template <class Message>
@@ -67,8 +67,566 @@ PipeSubscriber<Message>::~PipeSubscriber() {
     }
 }
 
+template <class Message>
+void PipeSubscriber<Message>::PushComplete()
+{
+    bool handled = false;
+    enum ACTION {
+        NOTHING,
+        PUBLISH
+    };
+
+    NOTIFY_STATE currentState = notifyState;
+    ACTION action = NOTHING;
+    while (handled == false) {
+        action = NOTHING;
+        NOTIFY_STATE newState = currentState;
+        switch (currentState) {
+        case DISABLED:
+            // Fine - nothing more to do.
+            handled = true;
+            break;
+
+        case NOTHING_TO_NOTIFY:
+            // Notification is primed - fire it.
+            newState = PUBLISHING;
+            action = PUBLISH;
+            break;
+
+        case CONFIGURING:
+            // Notification configuration is in process -
+            // we'll need to trigger it when done
+            newState = PULL_REQUIRED;
+            break;
+
+        case PULL_REQUIRED:
+            // Client will pull when its finished reconfiguring
+            handled = true;
+            break;
+
+        case CLIENT_WILL_RECONFIGURE:
+            // Client will pull when its finished reconfiguring
+            handled = true;
+            break;
+
+        case PULLING:
+            // Notification already being triggered, nothing else to do.
+            handled = true;
+            break;
+
+        case RECONFIGURE_REQUIRED:
+            // The client is currently busy, but will reconfigure (and fire) a notification when ready
+            handled = true;
+            break;
+
+        case SUB_WAKEUP_REQUIRED:
+            // This can't happen - as per the state model.
+            // SUB_WAKEUP_REQUIRED is a state which blocks out both threads -
+            // This can't have happened if we were publishing.
+            throw ThreadingViolation { "Non-publisher thread has published!"};
+
+        case PUBLISHING:
+            // PUBLISHING is a Publisher controlled state.
+            // We can't have been pushing *and* publishing.
+            throw ThreadingViolation { "Non-publisher thread has published!"};
+
+        case PUB_WILL_RECONFIGURE:
+            // PUB_WILL_RECONFIGURE results from a configure request in the PUBLISHING
+            // state. It is publisher controlled, so we can't have been both pushing and
+            // publishing.
+            throw ThreadingViolation { "Non-publisher thread has published!"};
+        case PUB_RECONFIGURING:
+            // We can't have been both reconfigurin and publishing.
+            throw ThreadingViolation { "Non-publisher thread has published!"};
+
+        case PREPARING_PUB_RECONFIGURE:
+            // This state represents a publisher thread that was already publishing.
+            // We can't have published!
+            throw ThreadingViolation { "Non-publisher thread has published!"};
+        }
+
+        // State change triggered...
+        if (!handled) {
+            handled = notifyState.compare_exchange_strong(
+                          currentState,
+                          newState);
+        }
+    }
+
+    switch (action) {
+    case PUBLISH:
+        PublishNextMessage();
+        break;
+    case NOTHING:
+        // nothing to do...
+        break;
+    }
+
+}
+
+template <class Message>
+void PipeSubscriber<Message>::PublishComplete()
+{
+    bool handled = false;
+    enum ACTION {
+        NOTHING,
+        RECONFIGURE
+    };
+
+    NOTIFY_STATE currentState = notifyState;
+    ACTION action = NOTHING;
+    while (handled == false) {
+        action = NOTHING;
+        NOTIFY_STATE newState = currentState;
+        switch (currentState) {
+            case PUBLISHING:
+                // Expected case - move back to the rest state
+                newState = DISABLED;
+                break;
+
+            case PREPARING_PUB_RECONFIGURE:
+                // A pending hook is being prepared by the client. Once it
+                // is done it will do a state check. Inform it that we're
+                // done and the client can make the hook live.
+                newState = CLIENT_WILL_RECONFIGURE;
+                break;
+
+            case PUB_WILL_RECONFIGURE:
+                // Client installed a pending hook whilst we were publishing
+                // Prepare to
+                action = RECONFIGURE;
+                newState = PUB_RECONFIGURING;
+                break;
+
+            case PUB_RECONFIGURING:
+                // We are supposed to be busy reconfiguring, we can't
+                // possible have published
+                throw ThreadingViolation { "Publish occurred whilst publisher was reconfiguring!"};
+
+            case RECONFIGURE_REQUIRED:
+                // Client controlled state - we would not have been
+                // allowed to publish
+                throw ThreadingViolation { "Publish occurred whilst nothing to push!"};
+
+            case SUB_WAKEUP_REQUIRED:
+                // Sub wakeup required is a pub controlled state
+                // which occurrs during a publisher side reconfigure.
+                // We can't have been publishing and reconfiguring.
+                throw ThreadingViolation { "Non publisher thread has published!"};
+
+            case DISABLED:
+                // This is simply ludicrous
+                throw ThreadingViolation { "Disabled client published!"};
+
+            case PULLING:
+                // PULLING is a client controlled state - we cannot have
+                // started a publish if the client was already pulling!
+                throw ThreadingViolation { "Publish occured whilst the client was pulling!"};
+
+            case PULL_REQUIRED:
+                // PULL_REQUIRED is a client controlled state representing an
+                // in progress configure. We can't have published whilst configuring.
+                throw ThreadingViolation { "Publish occured whilst the client was configuring!"};
+
+            case CONFIGURING:
+                // We can't have published whilst configuring
+                throw ThreadingViolation { "Publish occured whilst the client was configuring!"};
+
+            case NOTHING_TO_NOTIFY:
+                // If there was nothing to notify, we shouldn't have published.
+                throw ThreadingViolation { "Publish occurred whilst nothing to push!"};
+
+            case CLIENT_WILL_RECONFIGURE:
+                // The publisher had already handed over to us - it should not have started to publish again.
+                throw ThreadingViolation { "Publish occurred whilst was responsible for reconfiguring"};
+
+        }
+
+        // State change triggered...
+        if (!handled) {
+            handled = notifyState.compare_exchange_strong(
+                    currentState,
+                    newState);
+        }
+    }
+
+    switch (action) {
+        case RECONFIGURE:
+            ConfigurePendingNotify(PUBLISHER);
+            break;
+        case NOTHING:
+            // nothing to do...
+            break;
+    }
+
+}
+
+template <class Message>
+typename PipeSubscriber<Message>::CONFIGURE_ACTION
+PipeSubscriber<Message>::NotifyRequested()
+{
+    bool handled = false;
+    enum ACTION {
+        NOTHING,
+        CONFIGURE,
+        SETUP_PENDING,
+        WAIT
+    };
+
+    NOTIFY_STATE currentState = notifyState;
+    ACTION action = NOTHING;
+    while (handled == false) {
+        action = NOTHING;
+        NOTIFY_STATE newState = currentState;
+        switch (currentState) {
+            case DISABLED:
+                // Expected case - start the configuration...
+                newState = CONFIGURING;
+                action = CONFIGURE;
+                break;
+
+            case NOTHING_TO_NOTIFY:
+                // Replace the old notification with a new one...
+                newState = CONFIGURING;
+                action = CONFIGURE;
+                break;
+
+            case PUBLISHING:
+                // The publisher is already busy publishing, we'll need to wait
+                newState = PREPARING_PUB_RECONFIGURE;
+                action = SETUP_PENDING;
+                break;
+
+            case PUB_WILL_RECONFIGURE:
+                // OK fine, but if you're continuously reconfiguring under
+                // a publish it suggests poorly performing code...
+                newState = PREPARING_PUB_RECONFIGURE;
+                action = SETUP_PENDING;
+                break;
+
+            case PUB_RECONFIGURING:
+                // The publisher is busy reconfiguring (therefore we must be the client)
+                // We're going to need to wait until its done
+                newState = SUB_WAKEUP_REQUIRED;
+                action = WAIT;
+                break;
+
+            case CONFIGURING:
+                // The publisher is done - and has released control back to us;
+                action = CONFIGURE;
+                handled = true;
+                break;
+
+            case SUB_WAKEUP_REQUIRED:
+                // Sub wakeup required represents both threads inside the
+                // framework (not publishing / pulling).
+                // Therefore this can't happen unless a third thread is involved.
+                throw ThreadingViolation { "Reconfigure requires whilst client was sleeping"};
+
+            case PREPARING_PUB_RECONFIGURE:
+                // TODO: Add some tests for reconfiguring from publisher whilst client is etc...
+                // (Potentially we can make this work with a wakeup flag?)
+                throw ThreadingViolation { "Reconfigure attempt whilst preparing the pending reconfigure"};
+
+            case PULL_REQUIRED:
+                throw ThreadingViolation { "Reconfigure requested whilst the client was already reconfiguring"};
+
+            case CLIENT_WILL_RECONFIGURE:
+                throw ThreadingViolation { "Reconfigure requested whilst the client was already reconfiguring"};
+
+            case PULLING:
+                // Client is busy pulling. setup the pending...
+                action = SETUP_PENDING;
+                newState = RECONFIGURE_REQUIRED;
+                break;
+
+            case RECONFIGURE_REQUIRED:
+                // Fine - but if you're continually reconfiugring it suggest poorly performing code...
+                action = SETUP_PENDING;
+                handled = true;
+                break;
+        }
+
+        // State change triggered...
+        if (!handled) {
+            handled = notifyState.compare_exchange_strong(
+                    currentState,
+                    newState);
+        }
+
+        if (handled && action == WAIT)
+        {
+            handled = false;
+            WaitForWake();
+        }
+    }
+
+    CONFIGURE_ACTION op;
+    if (action == SETUP_PENDING) {
+        op = CONFIGURE_PENDING;
+    } else {
+        op = CONFIGURE_LIVE;
+    }
+    return op;
+}
+
+template <class Message>
+void PipeSubscriber<Message>::NotifyConfigured() {
+    bool handled = false;
+    enum ACTION {
+        NOTHING,
+        PULL,
+        WAKE
+    };
+
+    NOTIFY_STATE currentState = notifyState;
+    ACTION action = NOTHING;
+    while (handled == false) {
+        action = NOTHING;
+        NOTIFY_STATE newState = currentState;
+        switch (currentState) {
+            case CONFIGURING:
+                if (messages.read_available()) {
+                    action = PULL;
+                    newState = PULLING;
+                } else {
+                    newState = NOTHING_TO_NOTIFY;
+                }
+                break;
+
+            case PULL_REQUIRED:
+                // Fine - start the pull
+                action = PULL;
+                newState = PULLING;
+                break;
+
+            case PUB_RECONFIGURING:
+                // Fine - complete the reconfigure
+                action = NOTHING;
+                newState = NOTHING_TO_NOTIFY;
+                break;
+
+            case SUB_WAKEUP_REQUIRED:
+                action = WAKE;
+                newState = CONFIGURING;
+                break;
+
+            case PREPARING_PUB_RECONFIGURE:
+                throw ThreadingViolation { "Reconfiguration whilst the publisher was publishing!"};
+
+            case PUB_WILL_RECONFIGURE:
+                throw ThreadingViolation { "No reconfiguration was in progress!"};
+
+            case DISABLED:
+                throw ThreadingViolation { "Notifications were disabled whilst the client thread was configuring them!"};
+
+            case NOTHING_TO_NOTIFY:
+                throw ThreadingViolation { "Notifications were reset whilst the client thread was configuring them"};
+
+            case RECONFIGURE_REQUIRED:
+                throw ThreadingViolation { "Subscriber still requires reconfiguration, after reconfiguration is complete!"};
+
+            case PUBLISHING:
+                throw ThreadingViolation { "Publication started whilst the client was reconfiguring"};
+
+            case PULLING:
+                throw ThreadingViolation { "Second subscriber thread detected - a reconfiguration is already in process!"};
+
+            case CLIENT_WILL_RECONFIGURE:
+                throw ThreadingViolation { "Configuration completed whilst client was supposed to be setting up pending config!"};
+
+        }
+
+        // State change triggered...
+        if (!handled) {
+            handled = notifyState.compare_exchange_strong(
+                    currentState,
+                    newState);
+        }
+    }
+
+    switch (action)
+    {
+    case NOTHING:
+        break;
+    case WAKE:
+        WakeWaiter();
+        break;
+    case PULL:
+        PullNextMessage();
+        break;
+    }
+}
+
+template <class Message>
+void PipeSubscriber<Message>::NotifyPendingConfigured() {
+    bool handled = false;
+
+    enum ACTION {
+        NOTHING,
+        RECONFIGURE
+    };
+
+    ACTION action;
+    NOTIFY_STATE currentState = notifyState;
+    while (handled == false) {
+        action = NOTHING;
+        NOTIFY_STATE newState = currentState;
+        switch (currentState) {
+            case PREPARING_PUB_RECONFIGURE:
+                newState = PUB_WILL_RECONFIGURE;
+                break;
+
+            case CLIENT_WILL_RECONFIGURE:
+                newState = CONFIGURING;
+                action = RECONFIGURE;
+                break;
+
+            case CONFIGURING:
+                throw ThreadingViolation { "Pending configuration configured whilst the client was busy configuring"};
+
+            case PULL_REQUIRED:
+                throw ThreadingViolation { "Pending configuration configured whilst the client was busy configuring"};
+
+            case PUB_RECONFIGURING:
+                throw ThreadingViolation { "Pending configuration configured whilst the publisher was busy configuring"};
+
+            case SUB_WAKEUP_REQUIRED:
+                throw ThreadingViolation { "Pending configuration configured whilst the subscriber was waiting for the pub"};
+
+            case PUB_WILL_RECONFIGURE:
+                throw ThreadingViolation { "No pending reconfiguration was in progress!"};
+
+            case DISABLED:
+                throw ThreadingViolation { "No pending reconfiguration was in progress!"};
+
+            case NOTHING_TO_NOTIFY:
+                throw ThreadingViolation { "No pending reconfiguration was in progress!"};
+
+            case RECONFIGURE_REQUIRED:
+                throw ThreadingViolation { "No pending reconfiguration was in progress!"};
+
+            case PUBLISHING:
+                throw ThreadingViolation { "No pending reconfiguration was in progress!"};
+
+            case PULLING:
+                throw ThreadingViolation { "No pending reconfiguration was in progress!"};
+
+        }
+
+        // State change triggered...
+        if (!handled) {
+            handled = notifyState.compare_exchange_strong(
+                    currentState,
+                    newState);
+        }
+    }
+    switch (action)
+    {
+    case NOTHING:
+        break;
+    case RECONFIGURE:
+        ConfigurePendingNotify(CLIENT);
+        break;
+    }
+}
+
+template <class Message>
+void PipeSubscriber<Message>::PullComplete()
+{
+    enum ACTION {
+        NOTHING,
+        RECONFIGURE
+    } action;
+
+    bool handled = false;
+    NOTIFY_STATE currentState = notifyState;
+    while (handled == false) {
+        action = NOTHING;
+        NOTIFY_STATE newState = currentState;
+        switch (currentState) {
+            case PULLING:
+                // Expected case - move back to the rest state
+                newState = DISABLED;
+                break;
+
+            case RECONFIGURE_REQUIRED:
+                // A reconfiguration request was triggered whilst we we pulling
+                newState = PULL_REQUIRED;
+                action = RECONFIGURE;
+                break;
+
+            case DISABLED:
+                throw ThreadingViolation { "Pulling whilst the notifcation was disabled!"};
+
+            case PUBLISHING:
+                throw ThreadingViolation { "Pulling whilst the publisher was publishing!"};
+
+            case PULL_REQUIRED:
+                throw ThreadingViolation { "Pulling whilst the client was reconfiguring"};
+
+            case CONFIGURING:
+                throw ThreadingViolation { "Pulling whilst the client was reconfiguring"};
+
+            case NOTHING_TO_NOTIFY:
+                throw ThreadingViolation { "Pulling whilst there was nothing to notify!"};
+
+            case SUB_WAKEUP_REQUIRED:
+                throw ThreadingViolation { "Pulling whilst waiting for the publisher to release control!"};
+
+            case PUB_WILL_RECONFIGURE:
+                throw ThreadingViolation { "Pulling whilst waiting for the publisher to release control!"};
+
+            case PREPARING_PUB_RECONFIGURE:
+                throw ThreadingViolation { "Pulling whilst waiting for the publisher to release control!"};
+
+            case PUB_RECONFIGURING:
+                throw ThreadingViolation { "Pulling whilst waiting for the publisher to release control!"};
+
+            case CLIENT_WILL_RECONFIGURE:
+                throw ThreadingViolation { "Pulling whilst client was supposed to be reconfiguring!"};
+        }
+
+        // State change triggered...
+        if (!handled) {
+            handled = notifyState.compare_exchange_strong(
+                    currentState,
+                    newState);
+        }
+
+        switch(action)
+        {
+        case NOTHING:
+            // Nothing to do...
+            break;
+         case RECONFIGURE:
+             ConfigurePendingNotify(CLIENT);
+             break;
+        }
+    }
+}
+
+template <class Message>
+void PipeSubscriber<Message>::WakeWaiter() {
+    onNotifyFlag.notify_one();
+}
+
+template <class Message>
+void PipeSubscriber<Message>::WaitForWake() {
+    Lock lock(onNotifyMutex);
+    onNotifyFlag.wait(lock);
+}
+
+template <class Message>
+void PipeSubscriber<Message>::ConfigurePendingNotify(const THREAD& thread) {
+    onNotify = std::move(pending_onNotify);
+    targetToNotify = pending_targetToNotify;
+    pending_targetToNotify = nullptr;
+    NotifyConfigured();
+}
+
 template<class Message>
-void PipeSubscriber<Message>::NotifyNextMessage() {
+void PipeSubscriber<Message>::PublishNextMessage() {
     if (targetToNotify) {
         targetToNotify->PostTask(onNotify);
         targetToNotify = nullptr;
@@ -76,7 +634,19 @@ void PipeSubscriber<Message>::NotifyNextMessage() {
         onNotify();
     }
     onNotify = nullptr;
-    notifyOnMessage = false;
+    PublishComplete();
+}
+
+template<class Message>
+void PipeSubscriber<Message>::PullNextMessage() {
+    if (targetToNotify) {
+        targetToNotify->PostTask(onNotify);
+        targetToNotify = nullptr;
+    } else {
+        onNotify();
+    }
+    onNotify = nullptr;
+    PullComplete();
 }
 
 template <class Message>
@@ -95,42 +665,12 @@ void PipeSubscriber<Message>::PushMessage(const Message& msg) {
             onNewMessage(msg);
         }
     } else {
-        if (batching)
-        {
-            if ( !messages.push(msg) ) {
-                throw PushToFullQueueException {msg};
-            }
+        if ( !messages.push(msg) ) {
+            throw PushToFullQueueException {msg};
         }
-        else
+        if (!batching)
         {
-            if (notifyOnMessage)
-            {
-                Lock notifyLock(onNotifyMutex);
-
-                if ( !messages.push(msg) ) {
-                    throw PushToFullQueueException {msg};
-                }
-
-                if (notifyOnMessage)
-                {
-                    NotifyNextMessage();
-                }
-            }
-            else
-            {
-                if ( !messages.push(msg) ) {
-                    throw PushToFullQueueException {msg};
-                }
-
-                if (notifyOnMessage)
-                {
-                    Lock notifyLock(onNotifyMutex);
-                    if (notifyOnMessage)
-                    {
-                        NotifyNextMessage();
-                    }
-                }
-            }
+            PushComplete();
         }
     }
 }
@@ -169,28 +709,13 @@ void PipeSubscriber<Message>::OnNextMessage(const NextMessageCallback& f) {
 template<class Message>
 void PipeSubscriber<Message>::StartBatch() {
     batching = true;
-    onNotifyMutex.lock();
-
 }
 
 template<class Message>
 void PipeSubscriber<Message>::EndBatch() {
     if (batching) {
-
+        this->PushComplete();
         batching = false;
-
-        if (notifyOnMessage) {
-            if (targetToNotify) {
-                targetToNotify->PostTask(onNotify);
-                targetToNotify = nullptr;
-            } else {
-                onNotify();
-            }
-            onNotify = nullptr;
-            notifyOnMessage = false;
-        }
-
-        onNotifyMutex.unlock();
     }
 }
 
@@ -200,23 +725,21 @@ void PipeSubscriber<Message>::OnNextMessage(
          IPostable* target)
 {
     if (!this->aborted) {
-        Lock notifyLock(onNotifyMutex);
 
-        // We have the lock, so the publisher is now locked out.
-        notifyOnMessage = true;
-
-        if ( messages.read_available() > 0) {
-            onNotify = nullptr;
-            targetToNotify = nullptr;
-            notifyOnMessage = false;
-            if (target) {
-                target->PostTask(f);
-            } else {
-                f();
-            }
-        } else {
+        CONFIGURE_ACTION  action = this->NotifyRequested();
+        switch (action)
+        {
+        case CONFIGURE_LIVE:
             onNotify = f;
             targetToNotify = target;
+            NotifyConfigured();
+            break;
+
+        case CONFIGURE_PENDING:
+            pending_onNotify = f;
+            pending_targetToNotify = target;
+            NotifyPendingConfigured();
+            break;
         }
     }
 }

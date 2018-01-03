@@ -48,6 +48,7 @@ WorkerThread::~WorkerThread() {
 }
 
 void WorkerThread::Run() {
+
     std::unique_lock<std::mutex> lock(queueMutex);
     while (state == RUNNING) {
         // Drain the queue. Note that the lock will be relinquished during task
