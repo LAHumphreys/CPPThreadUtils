@@ -1,4 +1,3 @@
-set(CMAKE_PREFIX_PATH /home/lhumphreys/dev_tools_build/lib/cmake)
 #
 # Project Definition
 #
@@ -9,6 +8,9 @@ project(ThreadComms)
 # Find dependencies
 #
 find_package(UtilTime 0.1 REQUIRED)
+
+find_package(Threads REQUIRED)
+find_package(Boost REQUIRED)
 
 #
 # Exported Library (libThreadComms)
@@ -22,6 +24,10 @@ add_library(ThreadComms STATIC
     include/WorkerThread.h
     src/WorkerThread.cpp
 )
+target_link_libraries(ThreadComms PUBLIC
+    Threads::Threads
+    Boost::boost
+)
 target_include_directories(ThreadComms PUBLIC
     $<BUILD_INTERFACE:${ThreadComms_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
@@ -34,6 +40,10 @@ set_property(TARGET ThreadComms PROPERTY PUBLIC_HEADER
     ${ThreadComms_SOURCE_DIR}/include/PipeSubscriber.hpp
     ${ThreadComms_SOURCE_DIR}/include/WorkerThread.h
 )
+
+add_executable(publisherSpeed src/publisherSpeed.cpp src/dummy.cpp)
+target_link_libraries(publisherSpeed ThreadComms UtilTime::Time)
+target_compile_features(publisherSpeed PRIVATE cxx_std_14)
 
 #
 # Test Configuration
