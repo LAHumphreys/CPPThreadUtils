@@ -2,6 +2,8 @@
 #include <PipePublisher.h>
 #include <util_time.h>
 #include <iomanip>
+#include <sstream>
+#include <memory>
 #include <queue>
 #include <WorkerThread.h>
 

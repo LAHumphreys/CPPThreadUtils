@@ -202,6 +202,12 @@ protected:
      struct PushToFullQueueException {
          Message msg;
      };
+    struct DeadLockDetected {
+        std::string err;
+    };
+    struct ThreadingViolation {
+        std::string err;
+    };
 
      /**
       * Push a new message onto the queue. 
@@ -222,21 +228,96 @@ private:
      virtual void OnStateChange() final;
      virtual void StartBatch() final;
      virtual void EndBatch() final;
-    void NotifyNextMessage();
+
+    /***********************************
+     *     Message Dispatch
+     ***********************************/
+    /**
+     * Called from the publisher thread to trigger the the NextMessge callback (if requried);
+     */
+     void PublishNextMessage();
+
+    /**
+     * Called from the client thread to trigger the the NextMessge callback (if requried);
+     */
+     void PullNextMessage();
 
     /***********************************
      *          Synchronisation
      ***********************************/
     typedef std::unique_lock<std::mutex> Lock;
     std::mutex                           onNotifyMutex;
+    std::condition_variable              onNotifyFlag;
+
+    enum NOTIFY_STATE {
+        DISABLED,
+        NOTHING_TO_NOTIFY,
+        CONFIGURING,
+        PULL_REQUIRED,
+        PULLING,
+        RECONFIGURE_REQUIRED,
+        PUBLISHING,
+        SUB_WAKEUP_REQUIRED,
+        PREPARING_PUB_RECONFIGURE,
+        PUB_WILL_RECONFIGURE,
+        CLIENT_WILL_RECONFIGURE,
+        PUB_RECONFIGURING
+    };
+    std::atomic<NOTIFY_STATE>            notifyState;
+
+    /**
+     * Called on the publisher thread after a new message has been pushed
+     */
+    void PushComplete();
+
+    /**
+     * Called on the publisher thread after a client notification
+     * has been completed
+     */
+    void PublishComplete();
+
+    /**
+     * Called on the client thread after a client notification
+     * has been completed
+     */
+    void PullComplete();
+
+    /**
+     * Called on the client thread when a request has been
+     * received to register a new notification
+     */
+    enum CONFIGURE_ACTION {
+        CONFIGURE_LIVE,
+        CONFIGURE_PENDING
+    };
+    CONFIGURE_ACTION NotifyRequested();
+
+    /**
+     * Called on either thread when the live trigger has been reconfigured
+     */
+    void NotifyConfigured();
+
+    /**
+     * Called on the either thread when the pending trigger has been configured
+     */
+    void NotifyPendingConfigured();
+
+    void WakeWaiter();
+    void WaitForWake();
+
+    enum THREAD {
+        PUBLISHER,
+        CLIENT
+    };
+    void ConfigurePendingNotify(const THREAD& thread);
 
     /***********************************
      * Unread data Notification
      ***********************************/
-    NextMessageCallback  onNotify;
-    IPostable*           targetToNotify;
-    size_t               batchSize;
-    std::atomic<bool>    notifyOnMessage;
+    NextMessageCallback         onNotify;
+    IPostable*                  targetToNotify;
+    NextMessageCallback         pending_onNotify;
+    IPostable*                  pending_targetToNotify;
 
 
     /***********************************

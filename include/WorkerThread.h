@@ -214,11 +214,14 @@ inline void WorkerThread::HandleUpdates(
         ++count;
     }
 
-    auto callback =  [this, &clientRef = client, maxSlizeSize, task] () -> void {
-        this->HandleUpdates(clientRef,task,maxSlizeSize);
-    };
+    // This can't be done until this function call is complete...
+    this->PostTask([this, &clientRef = client, maxSlizeSize, task] () -> void {
+        auto callback =  [this, &clientRef = clientRef, maxSlizeSize, task] () -> void {
+            this->HandleUpdates(clientRef,task,maxSlizeSize);
+        };
+        clientRef.OnNextMessage(callback,this);
+    });
 
-    client.OnNextMessage(callback,this);
 }
 
 #endif /* DEV_TOOLS_CPP_LIBRARIES_LIBTHREADCOMMS_WORKERTHREAD_H_ */
