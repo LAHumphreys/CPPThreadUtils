@@ -1,0 +1,37 @@
+sudo: required
+
+addons:
+  apt:
+    sources:
+      - ubuntu-toolchain-r-test
+      - boost-latest
+      
+    packages:
+      - cmake
+      - cmake-data
+      - g++-6
+      - libgtest-dev
+      - libboost1.55-all-dev
+      - valgrind
+
+
+before_install:
+  - git clone --recursive https://github.com/Grauniad/CMakeUtils.git
+  - cd CMakeUtils
+  - ./travis/installGTest.sh
+  - cd ..
+  - ./buildDeps.sh
+
+install:
+  - pip install --user cpp-coveralls
+  - export CXX="g++-6"
+  - export CC="gcc-6"
+  
+script: 
+  - g++-6 --version
+  - ./buildFromDeps.sh
+  - cd Build
+  - make test
+  - ctest -T Memcheck
+  - cd ..
+  - ./CMakeUtils/travis/doCoverage.sh
