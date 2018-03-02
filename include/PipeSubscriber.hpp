@@ -386,7 +386,28 @@ void PipeSubscriber<Message>::NotifyConfigured() {
         NOTIFY_STATE newState = currentState;
         switch (currentState) {
             case CONFIGURING:
-                if (messages.read_available()) {
+                /**
+                 * We can't use read_available, since it is not provided in legacy boost
+                 * versions (such as that available on Travis CLI).
+                 *
+                 * Unlike read_available, the empty method uses memory_order_relaxed to access
+                 * the write pointer. This exposes us to concurrency issues, and is flagged up
+                 * by the API:
+                 *    "Due to the concurrent nature of the ringbuffer the result may be inaccurate."
+                 *
+                 * Whilst this is true in the general sense, the PipeSubscriber is protected by its
+                 * state model. All reads and writes of the state variable have strict
+                 * ordering, and therefore establish a memory fence. Since all pushes to the queue
+                 * occurr *before* state update, we know that either:
+                 *
+                 *     1. The current value of empty() matches that seen by the WRITER
+                 *        when the state was last updated
+                 *     2. The WRITER thread is about to perform state resolution, in which
+                 *        case it can handle both possible states (See ::PushComplete)
+                 *           PULLING:           No action required from WRITER
+                 *           NOTHING_TO_NOTIFY: Transition to PUBLISHING triggered
+                 */
+                if (messages.empty() == false) {
                     action = PULL;
                     newState = PULLING;
                 } else {
