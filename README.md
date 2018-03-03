@@ -10,3 +10,5 @@ IPostable       | IPostable.h      | Trivially interface for event_loops permitt
 WorkerThread    | WorkerTrhead.h   | Spawn a child thread which will yield until work is posted to it. (Implements IPostable)
 PipePublisher   | PipePublisher.h  | Publisher which supports multiple clients registering as update sinks.
 PipeSubscriber  | PipeSubscriber.h | Single-Producer, Single-Consumer implementation of the publisher client.
+
+This project used to be maintained as part of a private "dev_tools" monolith: https://github.com/Grauniad/dev_tools_legacy/tree/master/CPP/Libraries/libThreadComms 
