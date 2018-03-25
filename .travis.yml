@@ -15,7 +15,7 @@ addons:
 
 
 before_install:
-  - export CXX="clang++5.0"
+  - export CXX="clang++-5.0"
   - export CC="clang-5.0"
 
 install:
