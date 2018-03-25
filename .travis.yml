@@ -14,9 +14,9 @@ addons:
 
 
 before_install:
-  - export CXX="g++-7"
-  - export CC="gcc-7"
-  - g++-7 --version
+  - export CXX="g++-6"
+  - export CC="gcc-6"
+  - g++-6 --version
 
 install:
   - ./buildDeps.sh
