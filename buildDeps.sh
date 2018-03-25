@@ -7,24 +7,18 @@ else
     exit 1
 fi
 
-if [[ -e deps/NSTimestamps ]]; then
-    echo "Existing NSTimestamps directory, no need to clone"
+if [[ "$1" == "" ]]; then
+    DEPS_ROOT="$PWD/deps"
 else
-    git clone https://github.com/Grauniad/NanoSecondTimestamps.git deps/NSTimestamps || exit 1
+    DEPS_ROOT="$1"
+fi
+if [[ -e $DEPS_ROOT/CMakeUtils ]]; then
+    echo "Existing CMakeUtils directory, no need to clone"
+else
+    git clone https://github.com/Grauniad/CMakeUtils.git $DEPS_ROOT/CMakeUtils || exit 1
 fi
 
-DEPS_BUILD=$PWD/deps/build
+declare -A depList
+depList[Time]=https://github.com/Grauniad/NanoSecondTimestamps.git
 
-mkdir -p deps/NSTimestamps/build
-mkdir -p $DEPS_BUILD
-
-pushd deps/NSTimestamps || exit 1
-git pull
-pushd build || exit 1
-
-cmake "-DCMAKE_INSTALL_PREFIX:PATH=$DEPS_BUILD" ..
-make -j 3 || exit 1
-make install || exit 1
-
-popd || exit 1
-popd || exit 1
+source $DEPS_ROOT/CMakeUtils/build_tools/buildDepsCommon.sh || exit 1
