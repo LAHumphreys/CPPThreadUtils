@@ -14,15 +14,15 @@ addons:
 
 
 before_install:
-  - ./buildDeps.sh
-
-install:
-  - pip install --user cpp-coveralls
   - export CXX="g++-7"
   - export CC="gcc-7"
+  - g++-7 --version
+
+install:
+  - ./buildDeps.sh
+  - pip install --user cpp-coveralls
   
 script: 
-  - g++-7 --version
   - ./buildFromDeps.sh
   - cd Build
   - make test
