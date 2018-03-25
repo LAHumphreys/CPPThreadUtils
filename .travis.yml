@@ -10,7 +10,7 @@ addons:
       - cmake
       - cmake-data
       - clang-5.0
-      - libboost1.55-system
+      - libboost-system1.55
       - valgrind
 
 
