@@ -40,6 +40,7 @@ set_property(TARGET ThreadComms PROPERTY PUBLIC_HEADER
     ${ThreadComms_SOURCE_DIR}/include/PipeSubscriber.hpp
     ${ThreadComms_SOURCE_DIR}/include/WorkerThread.h
 )
+target_compile_features(ThreadComms PUBLIC cxx_std_14)
 
 add_executable(publisherSpeed src/publisherSpeed.cpp src/dummy.cpp)
 target_link_libraries(publisherSpeed ThreadComms UtilTime::Time)

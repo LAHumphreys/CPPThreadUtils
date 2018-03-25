@@ -282,7 +282,7 @@ ClientConsumer::ClientConsumer(
     PipePublisher<Msg>& publisher)
     : done(false), waiting(false), count(0)
 {
-    std::function<void (Msg&)> task = [&publisher, this, updatesToGet]
+    std::function<void (Msg&)> task = [this, updatesToGet]
                                       (Msg& m) -> void {
         dummy(m);
         this->count += 1;
