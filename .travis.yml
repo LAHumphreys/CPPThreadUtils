@@ -1,4 +1,4 @@
-sudo: required
+sudo: false
 
 addons:
   apt:
@@ -9,29 +9,24 @@ addons:
     packages:
       - cmake
       - cmake-data
-      - g++-6
-      - libgtest-dev
+      - g++-7
       - libboost1.55-all-dev
       - valgrind
 
 
 before_install:
-  - git clone --recursive https://github.com/Grauniad/CMakeUtils.git
-  - cd CMakeUtils
-  - ./travis/installGTest.sh
-  - cd ..
-  - ./buildDeps.sh
+  - export CXX="g++-7"
+  - export CC="gcc-7"
+  - g++-7 --version
 
 install:
+  - ./buildDeps.sh
   - pip install --user cpp-coveralls
-  - export CXX="g++-6"
-  - export CC="gcc-6"
   
 script: 
-  - g++-6 --version
   - ./buildFromDeps.sh
   - cd Build
   - make test
   - ctest -T Memcheck
   - cd ..
-  - COVERALLS_FLAGS="-e src/publisherSpeed.cpp -e src/dummy.cpp" ./CMakeUtils/travis/doCoverage.sh
+  - COVERALLS_FLAGS="-e src/publisherSpeed.cpp -e src/dummy.cpp" ./deps/CMakeUtils/travis/doCoverage.sh
