@@ -3,21 +3,20 @@ sudo: false
 addons:
   apt:
     sources:
-      - ubuntu-toolchain-r-test
+      - llvm-toolchain-trusty-5.0
       - boost-latest
       
     packages:
       - cmake
       - cmake-data
-      - g++-7
-      - libboost1.55-all-dev
+      - clang-5.0
+      - libboost-system1.55
       - valgrind
 
 
 before_install:
-  - export CXX="g++-7"
-  - export CC="gcc-7"
-  - g++-7 --version
+  - export CXX="clang++-5.0"
+  - export CC="clang-5.0"
 
 install:
   - ./buildDeps.sh

@@ -348,12 +348,12 @@ TEST(TSubsriberWorker, SliceSize) {
                 }
             };
 
-    std::function<void(Msg&)> task1 = [&f, &comms_mutex, &messages, &count1, &wait_for_complete, &toGet]
+    std::function<void(Msg&)> task1 = [&f, &count1, &wait_for_complete, &toGet]
                  (Msg& m) -> void {
                      f(count1, m,wait_for_complete,toGet,"ONE");
                  };
 
-    std::function<void(Msg&)> task2 = [&f, &comms_mutex, &messages, &count2, &wait_for_complete, &toGet]
+    std::function<void(Msg&)> task2 = [&f, &count2, &wait_for_complete, &toGet]
                  (Msg& m) -> void {
                      f(count2, m,wait_for_complete,toGet,"TWO");
                  };
