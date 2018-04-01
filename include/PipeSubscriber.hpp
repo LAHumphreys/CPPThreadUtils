@@ -1,5 +1,6 @@
 #include <PipePublisher.h>
 #include <IPostable.h>
+#include <future>
 
 
 template<class Message>
@@ -710,6 +711,15 @@ void PipeSubscriber<Message>::OnStateChange() {
          */
         aborted = true;
     }
+    else if (state == IPipeConsumer<Message>::FINSIHED) {
+        /**
+         * By definition this must have come from the publisher thread.
+         *
+         * Nothing else will ever be pushed to the queue. Wake the client
+         * thread (if it is waiting...)
+         */
+         this->PushComplete();
+    }
 }
 
 template <class Message>
@@ -721,6 +731,38 @@ bool PipeSubscriber<Message>::GetNextMessage(Message& msg) {
 
     return gotMsg;
 }
+
+template<class Message>
+bool PipeSubscriber<Message>::WaitForMessage(Message &msg) {
+    bool gotMsg = GetNextMessage(msg);
+    if (!gotMsg) {
+        bool complete = Complete();
+
+        if (complete) {
+            // One final check in case the final push
+            // came in between the two...
+            gotMsg = GetNextMessage(msg);
+        } else {
+            // Looks like we could require a block - prepare the callback
+            auto prom = std::make_shared<std::promise<bool>>();
+            OnNextMessage([=] () -> void {
+                prom->set_value(true);
+            });
+
+            // But did the publisher catch up in the interim?
+            gotMsg = GetNextMessage(msg);
+
+            if (!gotMsg && !Complete()) {
+                // Ok fine - no choice but to block
+                prom->get_future().wait();
+
+                gotMsg = GetNextMessage(msg);
+            }
+        }
+    }
+    return gotMsg;
+}
+
 
 template <class Message>
 void PipeSubscriber<Message>::OnNextMessage(const NextMessageCallback& f) {
@@ -775,3 +817,11 @@ void PipeSubscriber<Message>::OnNewMessage(const NewMessasgCallback& f) {
         while (!this->aborted && messages.consume_one(f)) { }
     }
 }
+
+template<class Message>
+bool PipeSubscriber<Message>::Complete() const {
+    auto state = this->State();
+    return (state == IPipeConsumer<Message>::FINSIHED ||
+            state == IPipeConsumer<Message>::ABORTED);
+}
+

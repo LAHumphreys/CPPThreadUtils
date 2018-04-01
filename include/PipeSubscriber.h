@@ -69,7 +69,7 @@ protected:
     /**
      * Thread safe check to observe the current state of the consumer.
      */
-    STATE State() {
+    STATE State() const {
         return state;
     }
 
@@ -142,6 +142,21 @@ public:
     bool GetNextMessage(Message& msg);
 
     /**
+     * Pop the next message off the queue and populate
+     * msg with the result.
+     *
+     * If there is no message to pop, block the thread until
+     * etiher:
+     *   - A message is available for read
+     *   - The publisher declares done
+     *
+     * @param msg   The message to populate.
+     *
+     * @returns true if msg was populated, false otherwise.
+     */
+    bool WaitForMessage(Message& msg);
+
+    /**
      * Trigger a callback function ON **ETIHER** the publisher thread OR the
      * current thread when there is at least one unread message. This can be
      * used to trigger a post to the subscriber thread if desired, e.g using
@@ -183,6 +198,14 @@ public:
      */
     typedef std::function<void(const Message&)> NewMessasgCallback;
     void OnNewMessage(const NewMessasgCallback&  f);
+
+    /*
+     * Has the publisher finished?
+     *
+     * NOTE: This does *not* mean that the client queue has been exhausted,
+     *       only that no further requests will be triggered
+     */
+    bool Complete() const;
 
 protected:
     friend class PipePublisher<Message>;

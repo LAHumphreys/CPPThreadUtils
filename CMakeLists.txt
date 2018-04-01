@@ -52,7 +52,7 @@ find_package(GTest REQUIRED)
 
 add_executable(pipe test/pipe.cpp)
 target_link_libraries(pipe ThreadComms GTest::GTest GTest::Main)
-target_compile_features(pipe PRIVATE cxx_std_11)
+target_compile_features(pipe PRIVATE cxx_std_14)
 
 add_executable(worker test/worker.cpp)
 target_link_libraries(worker PRIVATE ThreadComms UtilTime::Time GTest::GTest GTest::Main)

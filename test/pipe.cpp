@@ -1,5 +1,6 @@
 #include <PipePublisher.h>
 #include <gtest/gtest.h>
+#include <WorkerThread.h>
 
 using namespace std;
 
@@ -92,6 +93,38 @@ TEST(TPipeSubscriber,Notify) {
     ASSERT_NO_FATAL_FAILURE(MessagesMatch(expected,got));
 
     client->OnNextMessage(f);
+
+    ASSERT_NO_FATAL_FAILURE(MessagesMatch(toSend,got));
+}
+
+TEST(TPipeSubscriber,WaitForMessage) {
+    WorkerThread pushThread;
+    PipePublisher<Msg> publisher;
+    std::shared_ptr<PipeSubscriber<Msg>> client(publisher.NewClient(1024));
+    std::vector<Msg> toSend = {
+        {"Message 1"},
+        {"Mesasge 2"},
+        {"Hello World!"}
+    };
+
+    std::vector<Msg> got;
+
+    // Start pushing messages...
+    pushThread.Start();
+    pushThread.PostTask([&] () -> void {
+        for (auto& msg : toSend ) {
+            publisher.Publish(msg);
+        }
+        publisher.Done();
+    });
+
+    Msg msg;
+    while (client->WaitForMessage(msg)) {
+        // This double copy isn't particularly efficient -
+        // but its a test. get over it.
+        got.push_back(msg);
+    }
+
 
     ASSERT_NO_FATAL_FAILURE(MessagesMatch(toSend,got));
 }
