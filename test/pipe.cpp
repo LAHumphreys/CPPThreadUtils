@@ -62,7 +62,7 @@ TEST(TPipePublisher,PublishSingleConsumer) {
     MessagesMatch(toSend,got);
 }
 
-TEST(TPipePublisher,Notify) {
+TEST(TPipeSubscriber,Notify) {
     PipePublisher<Msg> publisher;
     std::shared_ptr<PipeSubscriber<Msg>> client(publisher.NewClient(1024));
     std::vector<Msg> toSend = {
@@ -96,7 +96,7 @@ TEST(TPipePublisher,Notify) {
     ASSERT_NO_FATAL_FAILURE(MessagesMatch(toSend,got));
 }
 
-TEST(TPipePublisher,BatchNotify) {
+TEST(TPipeSubscriber,BatchNotify) {
     PipePublisher<Msg> publisher;
     std::shared_ptr<PipeSubscriber<Msg>> client(publisher.NewClient(1024));
     std::vector<Msg> toSend = {
@@ -130,7 +130,7 @@ TEST(TPipePublisher,BatchNotify) {
     ASSERT_NO_FATAL_FAILURE(MessagesMatch(toSend,got));
 }
 
-TEST(TPipePublisher,PostNotify) {
+TEST(TPipeSubscriber,PostNotify) {
     PipePublisher<Msg> publisher;
     std::shared_ptr<PipeSubscriber<Msg>> client(publisher.NewClient(1024));
     std::vector<Msg> toSend = {
