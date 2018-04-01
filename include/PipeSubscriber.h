@@ -125,7 +125,6 @@ private:
 template <class Message>
 class PipeSubscriber: public IPipeConsumer<Message> {
 public:
-    typedef PipeSubscriber<Message> Type;
 
     virtual ~PipeSubscriber();
 
@@ -225,9 +224,6 @@ protected:
      struct PushToFullQueueException {
          Message msg;
      };
-    struct DeadLockDetected {
-        std::string err;
-    };
     struct ThreadingViolation {
         std::string err;
     };

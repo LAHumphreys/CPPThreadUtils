@@ -67,7 +67,7 @@ int main(int argc, const char *argv[])
     if (args["count"] != "") {
         long tmpCount = atol(args["count"].c_str());
         if (tmpCount > 0) {
-            COUNT = tmpCount;
+            COUNT = static_cast<size_t>(tmpCount);
         }
     }
 

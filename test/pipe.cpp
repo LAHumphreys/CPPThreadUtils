@@ -8,22 +8,6 @@ struct Msg {
     std::string   message;
 };
 
-class Client {
-    template <class F>
-    Client (PipeSubscriber<Msg>* client, F task) 
-       : subscription(client), worker(task)
-    {
-    }
-
-    ~Client() {
-        worker.join();
-        delete subscription;
-    }
-public:
-    PipeSubscriber<Msg>*  subscription;
-    std::thread           worker;
-};
-
 void MessagesMatch(std::vector<Msg>& sent,
                    std::vector<Msg>& got)
 {

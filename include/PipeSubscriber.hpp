@@ -489,7 +489,7 @@ void PipeSubscriber<Message>::NotifyPendingConfigured() {
         RECONFIGURE
     };
 
-    ACTION action;
+    ACTION action = NOTHING;
     NOTIFY_STATE currentState = notifyState;
     while (handled == false) {
         action = NOTHING;

@@ -111,7 +111,6 @@ private:
     friend class IPipeConsumer<Message>;
 
     typedef std::shared_ptr<IPipeConsumer<Message>> ClientRef;
-    typedef std::weak_ptr<IPipeConsumer<Message>> pClient;
 
     typedef std::vector<ClientRef> ClientList;
 
