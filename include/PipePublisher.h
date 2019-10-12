@@ -43,7 +43,7 @@ public:
      * @param  maxSize  Maximum number of unread messages
      */
     template <class Client = PipeSubscriber<Message>, class... Args>
-    std::shared_ptr<Client> NewClient(Args... args);
+    std::shared_ptr<Client> NewClient(Args&&... args);
 
     void InstallClient(std::shared_ptr<IPipeConsumer<Message>> client);
 

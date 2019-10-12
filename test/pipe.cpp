@@ -82,8 +82,8 @@ TEST(TPipeSubscriber,Notify) {
 }
 
 TEST(TPipeSubscriber,WaitForMessage) {
-    WorkerThread pushThread;
     PipePublisher<Msg> publisher;
+    WorkerThread pushThread;
     std::shared_ptr<PipeSubscriber<Msg>> client(publisher.NewClient(1024));
     std::vector<Msg> toSend = {
         {"Message 1"},
@@ -285,6 +285,26 @@ TEST(TPipeSubscriber,ForEachData) {
     }
 
     ASSERT_NO_FATAL_FAILURE(MessagesMatch(toSend,got));
+}
+
+TEST(TPipeSubscriber,InitialData) {
+    PipePublisher<Msg> publisher;
+    std::vector<Msg> toSend = {
+            {"Message 1"},
+            {"Mesasge 2"},
+            {"Hello World!"}
+    };
+    auto sent = toSend;
+    std::shared_ptr<PipeSubscriber<Msg>> client(publisher.NewClient(1024, std::move(toSend)));
+
+    std::vector<Msg> got;
+    auto f = [&] (const Msg& newMsg) -> void {
+        got.push_back(newMsg);
+    };
+
+    client->OnNewMessage(f);
+
+    ASSERT_NO_FATAL_FAILURE(MessagesMatch(sent,got));
 }
 
 TEST(TPipeSubscriber,BatchForEachData) {
