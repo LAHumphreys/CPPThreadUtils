@@ -9,15 +9,17 @@ addons:
     packages:
       - cmake
       - cmake-data
-      - g++-8
+      - g++-9
       - libboost-all-dev
       - valgrind
+      - libperlio-gzip-perl
+      - libjson-perl
 
 
 before_install:
-  - export CXX="g++-8"
-  - export CC="gcc-8"
-  - g++-8 --version
+  - export CXX="g++-9"
+  - export CC="gcc-9"
+  - g++-9 --version
 
 install:
   - ./buildDeps.sh
@@ -29,4 +31,5 @@ script:
   - make test
   - ctest -T Memcheck
   - cd ..
-  - COVERALLS_FLAGS="-e src/publisherSpeed.cpp -e src/dummy.cpp" ./deps/CMakeUtils/travis/doCoverage.sh
+  - GCOV="gcov-9" LCOV_FILTERS="$PWD/src/publisherSpeed.cpp $PWD/src/dummy.cpp" ./deps/CMakeUtils/travis/doCoverage.sh
+  - find . -name "*PipeSubscriber*hpp.gcov" | xargs cat

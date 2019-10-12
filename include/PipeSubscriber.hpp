@@ -48,7 +48,8 @@ bool IPipeConsumer<Message>::ChangeState(STATE& current, STATE to) {
 template <class Message>
 PipeSubscriber<Message>::PipeSubscriber(
     PipePublisher<Message>* _parent,
-    size_t maxSize)
+    size_t maxSize,
+    std::vector<Message> initialData)
         : notifyState(DISABLED),
           onNotify(nullptr),
           targetToNotify(nullptr),
@@ -58,6 +59,9 @@ PipeSubscriber<Message>::PipeSubscriber(
           messages(maxSize)
 {
     forwardMessage = false;
+    for (const auto& m: initialData ) {
+        PushMessage(m);
+    }
 }
 
 template <class Message>
