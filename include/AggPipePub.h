@@ -6,11 +6,19 @@
 
 #include <PipePublisher.h>
 #include <AggUpdate.h>
+#include <map>
 
 template <class Message>
 class AggPipePub {
 public:
-    using MsgRef = std::shared_ptr<Message>;
+    using MsgRef = std::shared_ptr<const Message>;
+    using IdType = typename Message::AggIdType;
+    constexpr const IdType& GetId(const Message& m) {
+        return m.GetAggId();
+    }
+    constexpr bool IsUpdated(const Message& orig, const Message& n) {
+        return !orig.IsAggEqual(n);
+    }
     void Update(MsgRef msg);
 
     using Upd = AggUpdate<Message>;
@@ -21,6 +29,7 @@ public:
     std::shared_ptr<Client> NewClient(Args... args);
 
 private:
+    std::map<IdType, MsgRef> data;
     Upd ManufactureUpdate(MsgRef msg);
     PipePublisher<Upd> pub_;
 };

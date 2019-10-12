@@ -10,17 +10,31 @@ using namespace std;
 using namespace nstimestamp;
 
 struct Msg {
-    explicit Msg (std::string m): message(std::move(m)) {}
+    Msg (std::string m, size_t i)
+        : message(std::move(m))
+        , id(i) {}
 
     std::string   message;
+    size_t        id;
+};
+struct WrappedMsg: public Msg {
+    WrappedMsg (std::string m, size_t i)
+        : Msg(std::move(m), i) {}
+
+    using AggIdType = size_t;
+    [[nodiscard]] constexpr const AggIdType& GetAggId() const { return id;}
+    [[nodiscard]] bool  IsAggEqual (const Msg& other) const {
+        return (message == other.message);
+    }
 };
 using Msgs = std::vector<Msg>;
 
-using MsgAgg = AggPipePub<Msg>;
+using MsgAgg = AggPipePub<WrappedMsg>;
 using Upds = std::vector<MsgAgg::Upd>;
 
 struct ExpUpd {
-    Msg m;
+    Msg           m;
+    AggUpdateType updateType = AggUpdateType::NONE;
 };
 using ExpUpds = std::vector<ExpUpd>;
 
@@ -31,15 +45,17 @@ void MessagesMatch(ExpUpds& exp, Upds& got)
     ASSERT_EQ(exp.size(), got.size());
 
     for (size_t i = 0; i < exp.size(); ++i) {
-        Msg& msg = exp[i].m;
-        Msg& recvd = *got[i].data;
-
+        const Msg& msg = exp[i].m;
+        const Msg& recvd = *got[i].data;
         ASSERT_EQ(msg.message, recvd.message);
+        ASSERT_EQ(msg.id, recvd.id);
+
+        ASSERT_EQ(exp[i].updateType, got[i].updateType);
     }
 }
 
 void Publish(MsgAgg& pub, const Msg& m) {
-    auto cpy = std::make_shared<Msg>(m);
+    auto cpy = std::make_shared<WrappedMsg>(m.message, m.id);
     pub.Update(std::move(cpy));
 }
 void Publish(MsgAgg& pub, const Msgs& msgs) {
@@ -56,22 +72,71 @@ void GetMessages(const size_t toGet, ClientRef& cli, Upds& dest) {
     }
 }
 
-TEST(TAggPuplisher,NewItems) {
+void PublishAndCheck (Msgs& toSend, ExpUpds& exp) {
     MsgAgg pub;
     ClientRef client = pub.NewClient(1024);
 
-    Msgs sent {
-        Msg{"Hello World!"}
-    };
-    Publish(pub, sent);
-
-    ExpUpds exp {
-        {Msg{"Hello World!"}}
-    };
+    Publish(pub, toSend);
 
     Upds got;
-    ASSERT_NO_FATAL_FAILURE(GetMessages(1, client, got));
+    ASSERT_NO_FATAL_FAILURE(GetMessages(exp.size(), client, got));
     ASSERT_NO_FATAL_FAILURE(MessagesMatch(exp, got));
+
+}
+
+TEST(TAggPuplisher,NewItems) {
+    Msgs toSend{
+        Msg{"Hello World!", 0},
+        Msg{"A new message", 1},
+        Msg{"Yet another message", 2}
+    };
+
+    ExpUpds exp{
+        {toSend[0], AggUpdateType::NEW},
+        {toSend[1], AggUpdateType::NEW},
+        {toSend[2], AggUpdateType::NEW}
+    };
+
+    PublishAndCheck(toSend, exp);
+}
+
+
+TEST(TAggPuplisher,UpdatedItems) {
+    Msgs toSend {
+        Msg{"Hello World!", 0},
+        Msg{"A new message", 1},
+        Msg{"Hello New World!", 0},
+        Msg{"Yet another message", 2}
+    };
+
+    ExpUpds exp {
+        {toSend[0], AggUpdateType::NEW},
+        {toSend[1], AggUpdateType::NEW},
+        {toSend[2], AggUpdateType::UPDATE},
+        {toSend[3], AggUpdateType::NEW}
+    };
+    PublishAndCheck(toSend, exp);
+}
+
+TEST(TAggPuplisher,NoDiffNoUpdate) {
+    Msgs toSend {
+            Msg{"Hello World!", 0},
+            Msg{"A new message", 1},
+            Msg{"Hello World!", 0},
+            Msg{"Yet another message", 2},
+            Msg{"Hello New World!", 0},
+            Msg{"Yet another message", 3}
+    };
+
+    ExpUpds exp {
+            {toSend[0], AggUpdateType::NEW},
+            {toSend[1], AggUpdateType::NEW},
+            // Update [2] is skipped, as there is no material change
+            {toSend[3], AggUpdateType::NEW},
+            {toSend[4], AggUpdateType::UPDATE},
+            {toSend[5], AggUpdateType::NEW},
+    };
+    PublishAndCheck(toSend, exp);
 }
 
 
