@@ -16,6 +16,9 @@ find_package(Boost REQUIRED)
 # Exported Library (libThreadComms)
 #
 add_library(ThreadComms STATIC
+    include/AggPipePub.h
+    include/AggPipePub.hpp
+    include/AggUpdate.h
     include/IPostable.h
     include/PipePublisher.h
     include/PipePublisher.hpp
@@ -24,6 +27,7 @@ add_library(ThreadComms STATIC
     include/WorkerThread.h
     src/WorkerThread.cpp
 )
+
 target_link_libraries(ThreadComms PUBLIC
     Threads::Threads
     Boost::boost
@@ -33,6 +37,9 @@ target_include_directories(ThreadComms PUBLIC
     $<INSTALL_INTERFACE:include>
 )
 set_property(TARGET ThreadComms PROPERTY PUBLIC_HEADER
+    ${ThreadComms_SOURCE_DIR}/include/AggPipePub.h
+    ${ThreadComms_SOURCE_DIR}/include/AggPipePub.hpp
+    ${ThreadComms_SOURCE_DIR}/include/AggUpddate.h
     ${ThreadComms_SOURCE_DIR}/include/IPostable.h
     ${ThreadComms_SOURCE_DIR}/include/PipePublisher.h
     ${ThreadComms_SOURCE_DIR}/include/PipePublisher.hpp
@@ -43,7 +50,7 @@ set_property(TARGET ThreadComms PROPERTY PUBLIC_HEADER
 
 add_executable(publisherSpeed src/publisherSpeed.cpp src/dummy.cpp)
 target_link_libraries(publisherSpeed ThreadComms UtilTime::Time)
-target_compile_features(publisherSpeed PRIVATE cxx_std_14)
+target_compile_features(publisherSpeed PRIVATE cxx_std_17)
 
 #
 # Test Configuration
@@ -52,11 +59,15 @@ find_package(GTest REQUIRED)
 
 add_executable(pipe test/pipe.cpp)
 target_link_libraries(pipe ThreadComms GTest::GTest GTest::Main)
-target_compile_features(pipe PRIVATE cxx_std_14)
+target_compile_features(pipe PRIVATE cxx_std_17)
+
+add_executable(agg test/agg.cpp include/AggPipePub.h)
+target_link_libraries(agg ThreadComms GTest::GTest GTest::Main)
+target_compile_features(agg PRIVATE cxx_std_17)
 
 add_executable(worker test/worker.cpp)
 target_link_libraries(worker PRIVATE ThreadComms UtilTime::Time GTest::GTest GTest::Main)
-target_compile_features(worker PRIVATE cxx_std_14)
+target_compile_features(worker PRIVATE cxx_std_17)
 
 #
 # NOTE: Valgrind must be configured *before* testing is imported
@@ -67,6 +78,7 @@ include (CTest)
 
 enable_testing()
 add_test(pipe pipe)
+add_test(agg agg)
 add_test(worker worker)
 
 #
