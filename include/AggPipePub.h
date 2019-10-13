@@ -10,6 +10,12 @@
 
 #include <AggPipePub_MessageAdaption.h>
 
+namespace AggPipePub_Config {
+    enum class AggPipePubUpdateMode {
+        SKIP_DUPLICATES,
+        NO_DUPLICATE_CHECKING
+    };
+}
 
 // Aggregated Data Update Publisher
 //
@@ -49,7 +55,9 @@
 // NOTE: Unlike the underlying PipePublisher, the AggPub publishes a
 //       shared_ptr to the Message, rather than performing a full copy
 //       to each thread.
-template <class Message>
+template <class Message,
+          AggPipePub_Config::AggPipePubUpdateMode updateMode =
+              AggPipePub_Config::AggPipePubUpdateMode::SKIP_DUPLICATES>
 class AggPipePub {
 public:
 // PUBLIC TYPE DEFINITIONS
@@ -99,15 +107,24 @@ public:
     std::shared_ptr<PipeSubscriber<Upd>> NewClient(const size_t& maxQueueSize);
 
 private:
-    using Adapter = AggPipePub_Adaption::MessageAdapter<Message>;
+    static constexpr bool diffUpdates =
+            (updateMode != AggPipePub_Config::AggPipePubUpdateMode::NO_DUPLICATE_CHECKING);
+
+    using Adapter = AggPipePub_Adaption::MessageAdapter<Message, diffUpdates>;
     using IdType = typename Adapter::GetAggIdValueType;
+
 
     constexpr const IdType GetId(const Message& m) {
         return Adapter::Get(m);
     }
 
-    constexpr bool IsUpdated(const Message& orig, const Message& n) {
-        return !Adapter::IsEqual(orig, n);
+    constexpr bool IsUpdated(const Message& orig, const Message& n)
+    {
+        if (diffUpdates) {
+            return !Adapter::IsEqual(orig, n);
+        } else {
+            return true;
+        }
     }
 
     class LockedData {
@@ -123,6 +140,12 @@ private:
     Upd ManufactureNewUpdate(MsgRef msg);
     PipePublisher<Upd> pub_;
 };
+
+template <class Message>
+using NonChecking_AggPipePub =
+        AggPipePub<
+               Message,
+               AggPipePub_Config::AggPipePubUpdateMode::NO_DUPLICATE_CHECKING>;
 
 #include <AggPipePub.hpp>
 #endif //THREADCOMMS_AGGPIPEPUB_H

@@ -88,10 +88,39 @@ namespace AggPipePub_Adaption {
     };
 
     /******************************************************
+     *    Diffing adapter that uses the Message's inbuilt
+     *    diffing operator (IsAggEqual) to determine whether
+     *    clients should be notifed of an update.
+     *
+     *
+     *    NOTE: We still require a valid object, even if
+     *          Message doesn't have the comparator
+     ******************************************************/
+    template<class Message, bool HasComparator>
+    struct IsEqUpdateChecker {
+        using EnableIf_HasComparator =
+        typename std::enable_if<HasComparator, bool>::type;
+
+        static constexpr EnableIf_HasComparator IsEq(
+            const Message& orig,
+            const Message& upd)
+        {
+            return orig.IsAggEqual(upd);
+        }
+    };
+
+    template<class Message>
+    struct NoDiffingChecker {
+        static constexpr bool IsEq(const Message& orig, const Message& upd) {
+            return false;
+        }
+    };
+
+    /******************************************************
      *  Adapt the message type to provide access to the Id
      *  field.
      ******************************************************/
-    template<class Message>
+    template<class Message, bool requiresIsEq>
     struct MessageAdapter {
         static constexpr bool hasGetAggId = HasGetAggId<Message>(0);
         static constexpr bool hasId = HasId<Message>(0);
@@ -106,6 +135,9 @@ namespace AggPipePub_Adaption {
                        "        <id type> GetAggId() const;"
                        "   };");
 
+        static_assert(!requiresIsEq || hasAggEq,
+                      "Message object has no IsAggEqual method, but update"
+                      " diffing was requestd!");
 
 
         using GetAdapter =
@@ -120,13 +152,15 @@ namespace AggPipePub_Adaption {
             return GetAdapter::Get(m);
         }
 
-        using EnableIf_HasAggEq =
-           typename std::enable_if<hasAggEq, bool>::type;
+        using DiffAdapter =
+            typename std::conditional<
+                    hasAggEq,
+                    IsEqUpdateChecker<Message, hasAggEq>,
+                    NoDiffingChecker<Message>>::type;
 
-        static constexpr EnableIf_HasAggEq IsEqual(
-                const Message& orig, const Message& upd)
+        static constexpr bool IsEqual(const Message& orig, const Message& upd)
         {
-            return orig.IsAggEqual(upd);
+            return DiffAdapter::IsEq(orig, upd);
         }
     };
 }

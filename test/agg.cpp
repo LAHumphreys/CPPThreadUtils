@@ -18,6 +18,12 @@ struct Msg {
     std::string   message;
     size_t        _id;
 };
+struct IdMsg: public Msg {
+    IdMsg(const Msg& m)
+            : Msg(m), id(m._id) {}
+
+    size_t id;
+};
 struct WrappedMsg: public Msg {
     WrappedMsg (std::string m, size_t i)
         : Msg(std::move(m), i) {}
@@ -127,6 +133,45 @@ TEST(TAggPuplisher,UpdatedItems) {
         {toSend[3], AggUpdateType::NEW}
     };
     PublishAndCheck(toSend, exp);
+}
+
+/*
+ * If diffing has been disabled, then all updates should be broadcast,
+ * regardless of whether a material change has happened to the object.
+ *
+ * The Msg is not required to provide a diffing util.
+ */
+TEST(TAggPuplisher,UpdatedItems_NoDiffing) {
+    Msgs toSend {
+            Msg{"Hello World!", 0},
+            Msg{"A new message", 1},
+            Msg{"Hello New World!", 0},
+            Msg{"Hello New World!", 0},
+            Msg{"Yet another message", 2}
+    };
+
+    ExpUpds exp {
+            {toSend[0], AggUpdateType::NEW},
+            {toSend[1], AggUpdateType::NEW},
+            {toSend[2], AggUpdateType::UPDATE},
+            {toSend[3], AggUpdateType::UPDATE},
+            {toSend[4], AggUpdateType::NEW}
+    };
+    NonChecking_AggPipePub<IdMsg> pub;
+    auto client = pub.NewClient(64);
+    for (auto m: toSend) {
+        auto mref = std::make_shared<IdMsg>(m);
+        pub.Update(std::move(mref));
+    }
+
+    NonChecking_AggPipePub<IdMsg>::Upd upd;
+    for (size_t i = 0; i < exp.size(); ++i) {
+        ASSERT_TRUE(client->GetNextMessage(upd));
+        ASSERT_EQ(upd.updateType, exp[i].updateType);
+        ASSERT_EQ(upd.data->message, exp[i].m.message);
+        ASSERT_EQ(upd.data->_id, exp[i].m._id);
+    }
+    ASSERT_FALSE(client->GetNextMessage(upd));
 }
 
 /*
@@ -293,14 +338,10 @@ TEST(TAggPuplisherThreads,LastSubFastPubRace) {
             stamp.SetNow();
         }
 
-        [[nodiscard]] bool  IsAggEqual (const IdStamp& other) const {
-            return (stamp.DiffNSecs(other.stamp) == 0);
-        }
-
         size_t id    = 0;
         Time   stamp = Time().SetNow();
     };
-    using IdPub = AggPipePub<IdStamp>;
+    using IdPub = NonChecking_AggPipePub<IdStamp>;
     using IdPubRef = std::shared_ptr<IdPub>;
     using IdClientRef = IdPub::ClientRef;
 
