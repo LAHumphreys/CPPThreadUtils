@@ -5,6 +5,7 @@
 #include <gtest/gtest.h>
 #include <AggPipePub.h>
 #include <util_time.h>
+#include <WorkerThread.h>
 
 using namespace std;
 using namespace nstimestamp;
@@ -192,6 +193,86 @@ TEST(TAggPuplisher,LateSubscriber) {
 }
 
 
+/*
+ * The above test define the basic behaviourial properties
+ * of the AggPub - but in reality we expect each sub to
+ * be on their own thread.
+ *
+ * This first threaded test replicates the basic flow,
+ * without trying to force any potential race conditions
+ */
+TEST(TAggPuplisherThreads,BasicFlow) {
+    WorkerThread pubThread;
+    WorkerThread clientThread;
+    WorkerThread lateClientThread;
+    pubThread.Start();
+    clientThread.Start();
+    lateClientThread.Start();
+
+    Msgs toSend {
+            Msg{"Hello World!", 0},
+            Msg{"A new message", 1},
+            Msg{"Hello World!", 0},
+            Msg{"Yet another message", 2},
+            Msg{"Hello New World!", 0},
+            Msg{"Yet another message", 3}
+    };
+
+    Msgs toSend_late {
+            Msg{"Hello New World!", 0},
+            Msg{"A new message", 4},
+            Msg{"Brand new 0", 0},
+    };
+
+    ExpUpds exp {
+            {toSend[0], AggUpdateType::NEW},
+            {toSend[1], AggUpdateType::NEW},
+            // Update [2] is skipped, as there is no material change
+            {toSend[3], AggUpdateType::NEW},
+            {toSend[4], AggUpdateType::UPDATE},
+            {toSend[5], AggUpdateType::NEW},
+            // late [0] is skipped, as there is no material change
+            {toSend_late[1], AggUpdateType::NEW},
+            {toSend_late[2], AggUpdateType::UPDATE},
+    };
+
+    ExpUpds lateUpdates {
+            {toSend[4], AggUpdateType::NEW},
+            {toSend[1], AggUpdateType::NEW},
+            {toSend[3], AggUpdateType::NEW},
+            {toSend[5], AggUpdateType::NEW},
+            // late [0] is skipped, as there is no material change
+            {toSend_late[1], AggUpdateType::NEW},
+            {toSend_late[2], AggUpdateType::UPDATE},
+    };
+
+    MsgAgg pub;
+    ClientRef client, lateClient;
+
+    clientThread.DoTask([&] () -> void {
+        client = pub.NewClient(1024);
+    });
+
+    pubThread.DoTask([&] () -> void {
+        Publish(pub, toSend);
+    });
+
+    lateClientThread.DoTask([&] () -> void {
+        lateClient = pub.NewClient(1024);
+    });
+
+    pubThread.DoTask([&] () -> void {
+        Publish(pub, toSend_late);
+    });
+
+    clientThread.DoTask([&] () -> void {
+        CheckClient(client, exp);
+    });
+
+    lateClientThread.DoTask([&] () -> void {
+        CheckClient(lateClient, lateUpdates);
+    });
+}
 
 
 
