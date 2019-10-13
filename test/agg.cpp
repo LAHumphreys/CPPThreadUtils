@@ -13,17 +13,16 @@ using namespace nstimestamp;
 struct Msg {
     Msg (std::string m, size_t i)
         : message(std::move(m))
-        , id(i) {}
+        , _id(i) {}
 
     std::string   message;
-    size_t        id;
+    size_t        _id;
 };
 struct WrappedMsg: public Msg {
     WrappedMsg (std::string m, size_t i)
         : Msg(std::move(m), i) {}
 
-    using AggIdType = size_t;
-    [[nodiscard]] constexpr const AggIdType& GetAggId() const { return id;}
+    [[nodiscard]] constexpr const auto& GetAggId() const { return _id;}
     [[nodiscard]] bool  IsAggEqual (const Msg& other) const {
         return (message == other.message);
     }
@@ -49,14 +48,14 @@ void MessagesMatch(ExpUpds& exp, Upds& got)
         const Msg& msg = exp[i].m;
         const Msg& recvd = *got[i].data;
         ASSERT_EQ(msg.message, recvd.message);
-        ASSERT_EQ(msg.id, recvd.id);
+        ASSERT_EQ(msg._id, recvd._id);
 
         ASSERT_EQ(exp[i].updateType, got[i].updateType);
     }
 }
 
 void Publish(MsgAgg& pub, const Msg& m) {
-    auto cpy = std::make_shared<WrappedMsg>(m.message, m.id);
+    auto cpy = std::make_shared<WrappedMsg>(m.message, m._id);
     pub.Update(std::move(cpy));
 }
 void Publish(MsgAgg& pub, const Msgs& msgs) {
@@ -274,6 +273,66 @@ TEST(TAggPuplisherThreads,BasicFlow) {
     });
 }
 
+/*
+ * We have to be careful when installing a late subscriber -
+ * the client thread will attempt to traverse publisher's data
+ * store to build an intiial image.
+ *
+ * *However*, if the publisher thread is attempting to publish
+ * at the same time, it might be trying to delete / update from
+ * that store.
+ *
+ * We're optimizing for the case where installing a client is rare
+ * - as a result, a simple lock around the data store is acceptable.
+ */
+TEST(TAggPuplisherThreads,LastSubFastPubRace) {
+    struct IdStamp {
+        IdStamp (size_t id)
+          : id(id)
+        {
+            stamp.SetNow();
+        }
+
+        [[nodiscard]] bool  IsAggEqual (const IdStamp& other) const {
+            return (stamp.DiffNSecs(other.stamp) == 0);
+        }
+
+        size_t id    = 0;
+        Time   stamp = Time().SetNow();
+    };
+    using IdPub = AggPipePub<IdStamp>;
+    using IdPubRef = std::shared_ptr<IdPub>;
+    using IdClientRef = IdPub::ClientRef;
+
+    IdPubRef pub = std::make_shared<IdPub>();
+    IdClientRef client;
+
+    WorkerThread pubThread, clientThread;
+    std::atomic_bool clientDone = false;
+
+    pubThread.Start();
+    pubThread.PostTask([&] () -> void {
+        while (!clientDone) {
+            for (size_t i = 0; i < 10; ++i) {
+                pub->Update(std::make_shared<IdStamp>(i));
+            }
+        }
+    });
+
+    clientThread.Start();
+    clientThread.DoTask([&] () -> void {
+        client = pub->NewClient(102400);
+        clientDone = true;
+        // The first ten items, should be the first 10 ids: since
+        // this is the initial data set.
+        for (size_t i = 0; i < 10; ++i) {
+            AggUpdate<IdStamp> upd;
+            ASSERT_TRUE(client->GetNextMessage(upd));
+            ASSERT_EQ(i, upd.data->id);
+            ASSERT_EQ(AggUpdateType::NEW, upd.updateType);
+        }
+    });
+}
 
 
 

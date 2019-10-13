@@ -18,6 +18,7 @@ find_package(Boost REQUIRED)
 add_library(ThreadComms STATIC
     include/AggPipePub.h
     include/AggPipePub.hpp
+    include/AggPipePub_MessageAdaption.h
     include/AggUpdate.h
     include/IPostable.h
     include/PipePublisher.h
@@ -39,6 +40,7 @@ target_include_directories(ThreadComms PUBLIC
 set_property(TARGET ThreadComms PROPERTY PUBLIC_HEADER
     ${ThreadComms_SOURCE_DIR}/include/AggPipePub.h
     ${ThreadComms_SOURCE_DIR}/include/AggPipePub.hpp
+    ${ThreadComms_SOURCE_DIR}/include/AggPipePub_MessageAdaption.h
     ${ThreadComms_SOURCE_DIR}/include/AggUpddate.h
     ${ThreadComms_SOURCE_DIR}/include/IPostable.h
     ${ThreadComms_SOURCE_DIR}/include/PipePublisher.h
@@ -62,7 +64,7 @@ target_link_libraries(pipe ThreadComms GTest::GTest GTest::Main)
 target_compile_features(pipe PRIVATE cxx_std_17)
 
 add_executable(agg test/agg.cpp include/AggPipePub.h)
-target_link_libraries(agg ThreadComms GTest::GTest GTest::Main)
+target_link_libraries(agg ThreadComms UtilTime::Time GTest::GTest GTest::Main)
 target_compile_features(agg PRIVATE cxx_std_17)
 
 add_executable(worker test/worker.cpp)
