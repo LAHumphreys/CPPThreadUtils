@@ -72,18 +72,25 @@ void GetMessages(const size_t toGet, ClientRef& cli, Upds& dest) {
     }
 }
 
+void CheckClient(ClientRef client, ExpUpds& exp) {
+    Upds got;
+    ASSERT_NO_FATAL_FAILURE(GetMessages(exp.size(), client, got));
+    ASSERT_NO_FATAL_FAILURE(MessagesMatch(exp, got));
+}
+
 void PublishAndCheck (Msgs& toSend, ExpUpds& exp) {
     MsgAgg pub;
     ClientRef client = pub.NewClient(1024);
 
     Publish(pub, toSend);
-
-    Upds got;
-    ASSERT_NO_FATAL_FAILURE(GetMessages(exp.size(), client, got));
-    ASSERT_NO_FATAL_FAILURE(MessagesMatch(exp, got));
-
+    CheckClient(client, exp);
 }
 
+/*
+ * As updates for new items arrive, they are immediately
+ * published to any subscribed clients. They'll be published
+ * with an updateType of NEW
+ */
 TEST(TAggPuplisher,NewItems) {
     Msgs toSend{
         Msg{"Hello World!", 0},
@@ -101,6 +108,10 @@ TEST(TAggPuplisher,NewItems) {
 }
 
 
+/*
+ * When an existing item is updated, with a new value, it
+ * is published to clients with an updateType of UPDATE
+ */
 TEST(TAggPuplisher,UpdatedItems) {
     Msgs toSend {
         Msg{"Hello World!", 0},
@@ -118,6 +129,11 @@ TEST(TAggPuplisher,UpdatedItems) {
     PublishAndCheck(toSend, exp);
 }
 
+/*
+ * If an existing item is updated, but has not changed, then
+ * the update is *not* re-published
+ *
+ */
 TEST(TAggPuplisher,NoDiffNoUpdate) {
     Msgs toSend {
             Msg{"Hello World!", 0},
@@ -137,6 +153,42 @@ TEST(TAggPuplisher,NoDiffNoUpdate) {
             {toSend[5], AggUpdateType::NEW},
     };
     PublishAndCheck(toSend, exp);
+}
+
+TEST(TAggPuplisher,LateSubscriber) {
+    Msgs toSend {
+            Msg{"Hello World!", 0},
+            Msg{"A new message", 1},
+            Msg{"Hello World!", 0},
+            Msg{"Yet another message", 2},
+            Msg{"Hello New World!", 0},
+            Msg{"Yet another message", 3}
+    };
+
+    ExpUpds exp {
+            {toSend[0], AggUpdateType::NEW},
+            {toSend[1], AggUpdateType::NEW},
+            // Update [2] is skipped, as there is no material change
+            {toSend[3], AggUpdateType::NEW},
+            {toSend[4], AggUpdateType::UPDATE},
+            {toSend[5], AggUpdateType::NEW},
+    };
+
+    MsgAgg pub;
+    ClientRef client = pub.NewClient(1024);
+
+    Publish(pub, toSend);
+    CheckClient(client, exp);
+
+    ExpUpds lateUpdates {
+            {toSend[4], AggUpdateType::NEW},
+            {toSend[1], AggUpdateType::NEW},
+            {toSend[3], AggUpdateType::NEW},
+            {toSend[5], AggUpdateType::NEW},
+    };
+
+    ClientRef lateClient = pub.NewClient(1024);
+    CheckClient(lateClient, lateUpdates);
 }
 
 

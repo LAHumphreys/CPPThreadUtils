@@ -6,9 +6,17 @@
 #include <AggPipePub.h>
 
 template<class Message>
-template<class Client, class... Args>
-std::shared_ptr<Client> AggPipePub<Message>::NewClient(Args... args) {
-    return pub_.template NewClient<Client>(args...);
+typename AggPipePub<Message>::ClientRef
+    AggPipePub<Message>::NewClient(const size_t& max)
+{
+    std::vector<Upd> initialData;
+    // TODO: Locking
+    initialData.reserve(data.size());
+    for ( const auto& pair: data) {
+        initialData.push_back(ManufactureNewUpdate(pair.second));
+    }
+
+    return pub_.template NewClient<Client>(max, std::move(initialData));
 }
 
 template<class Message>
@@ -30,11 +38,19 @@ typename AggPipePub<Message>::Upd AggPipePub<Message>::ManufactureUpdate(AggPipe
     } else if (IsUpdated(*it->second, *m)) {
         data.erase(it);
         updType = AggUpdateType::UPDATE;
+        data[id] =  m;
     } else {
         updType = AggUpdateType::NONE;
     }
 
     return Upd{std::move(m), updType};
+}
+
+template<class Message>
+typename AggPipePub<Message>::Upd
+    AggPipePub<Message>::ManufactureNewUpdate(AggPipePub::MsgRef msg)
+{
+    return AggPipePub::Upd{msg, AggUpdateType::NEW};
 }
 
 #endif //THREADCOMMS_AGGPIPEPUB_HPP

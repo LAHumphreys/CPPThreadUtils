@@ -219,7 +219,8 @@ protected:
      */
     PipeSubscriber(
         PipePublisher<Message>* parent,
-        size_t maxSize);
+        size_t maxSize,
+        std::vector<Message> initData = {});
 
      struct PushToFullQueueException {
          Message msg;

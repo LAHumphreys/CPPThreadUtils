@@ -22,15 +22,17 @@ public:
     void Update(MsgRef msg);
 
     using Upd = AggUpdate<Message>;
+    using Client = PipeSubscriber<Upd>;
+    using ClientRef = std::shared_ptr<Client>;
     /**
      * Create a new subscription to the update publisher.
      */
-    template <class Client = PipeSubscriber<Upd>, class... Args>
-    std::shared_ptr<Client> NewClient(Args... args);
+    std::shared_ptr<PipeSubscriber<Upd>> NewClient(const size_t& maxQueueSize);
 
 private:
     std::map<IdType, MsgRef> data;
     Upd ManufactureUpdate(MsgRef msg);
+    Upd ManufactureNewUpdate(MsgRef msg);
     PipePublisher<Upd> pub_;
 };
 

@@ -93,8 +93,8 @@ void PipePublisher<Message>::Publish(const Message& msg) {
 
 template <class Message>
 template <class Client, class... Args>
-std::shared_ptr<Client> PipePublisher<Message>::NewClient(Args... args) {
-    std::shared_ptr<Client> client (new Client(this, args...));
+std::shared_ptr<Client> PipePublisher<Message>::NewClient(Args&&... args) {
+    std::shared_ptr<Client> client (new Client(this, std::forward<Args>(args)...));
     InstallClient(client);
     return client;
 
