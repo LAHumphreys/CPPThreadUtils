@@ -82,8 +82,8 @@ TEST(TPipeSubscriber,Notify) {
 }
 
 TEST(TPipeSubscriber,WaitForMessage) {
-    WorkerThread pushThread;
     PipePublisher<Msg> publisher;
+    WorkerThread pushThread;
     std::shared_ptr<PipeSubscriber<Msg>> client(publisher.NewClient(1024));
     std::vector<Msg> toSend = {
         {"Message 1"},
