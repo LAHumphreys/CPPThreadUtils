@@ -351,12 +351,20 @@ TEST(TAggPuplisherThreads,LastSubFastPubRace) {
 
     WorkerThread pubThread, clientThread;
 
+    auto loadData =  [&] () -> void {
+        for (size_t i = 0; i < 10; ++i) {
+            pub->Update(std::make_shared<IdStamp>(i));
+        }
+    };
+
     pubThread.Start();
+    pubThread.DoTask([&] () -> void {
+            loadData();
+    });
+
     pubThread.PostTask([&] () -> void {
         while (!clientDone) {
-            for (size_t i = 0; i < 10; ++i) {
-                pub->Update(std::make_shared<IdStamp>(i));
-            }
+            loadData();
         }
     });
 
