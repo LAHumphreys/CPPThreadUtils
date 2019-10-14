@@ -347,9 +347,9 @@ TEST(TAggPuplisherThreads,LastSubFastPubRace) {
 
     IdPubRef pub = std::make_shared<IdPub>();
     IdClientRef client;
+    std::atomic_bool clientDone = false;
 
     WorkerThread pubThread, clientThread;
-    std::atomic_bool clientDone = false;
 
     pubThread.Start();
     pubThread.PostTask([&] () -> void {
