@@ -88,10 +88,13 @@ set(MEMORYCHECK_COMMAND_OPTIONS "--gen-suppressions=all --track-origins=yes --fr
 find_program(MEMORYCHECK_COMMAND valgrind )
 include (CTest)
 
+# Declare individual test binaries in preference to allTests, for greater
+# granularity in the event of crash / fault to track down.
 enable_testing()
 add_test(pipe pipe)
 add_test(agg agg)
 add_test(worker worker)
+
 
 #
 # Installation instructions
