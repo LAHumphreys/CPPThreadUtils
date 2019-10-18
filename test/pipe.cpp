@@ -4,20 +4,22 @@
 
 using namespace std;
 
-struct Msg {
-    std::string   message;
-};
+namespace {
+    struct Msg {
+        std::string   message;
+    };
 
-void MessagesMatch(std::vector<Msg>& sent,
-                   std::vector<Msg>& got)
-{
-    ASSERT_EQ(sent.size(), got.size());
+    void MessagesMatch(std::vector<Msg>& sent,
+                       std::vector<Msg>& got)
+    {
+        ASSERT_EQ(sent.size(), got.size());
 
-    for (size_t i = 0; i < sent.size(); ++i) {
-        Msg& msg = sent[i];
-        Msg& recvd = got[i];
+        for (size_t i = 0; i < sent.size(); ++i) {
+            Msg& msg = sent[i];
+            Msg& recvd = got[i];
 
-        ASSERT_EQ(msg.message, recvd.message);
+            ASSERT_EQ(msg.message, recvd.message);
+        }
     }
 }
 

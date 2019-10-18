@@ -72,6 +72,16 @@ target_link_libraries(worker PRIVATE ThreadComms UtilTime::Time GTest::GTest GTe
 target_compile_features(worker PRIVATE cxx_std_17)
 
 #
+# Hack - pull all of the tests into a single executable.
+#
+# This works around a limitation of cpp-coveralls whereby it drops
+# the coverage of earlier runs for templated files.
+#
+add_executable(allTests test/worker.cpp test/pipe.cpp test/agg.cpp)
+target_link_libraries(allTests PRIVATE ThreadComms UtilTime::Time GTest::GTest GTest::Main)
+target_compile_features(allTests PRIVATE cxx_std_17)
+
+#
 # NOTE: Valgrind must be configured *before* testing is imported
 #
 set(MEMORYCHECK_COMMAND_OPTIONS "--gen-suppressions=all --track-origins=yes --freelist-vol=2000000000 --error-exitcode=1 --track-fds=yes --num-callers=50 --fullpath-after= --trace-children=yes --leak-check=full" )

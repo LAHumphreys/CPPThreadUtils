@@ -10,88 +10,90 @@
 using namespace std;
 using namespace nstimestamp;
 
-struct Msg {
-    Msg (std::string m, size_t i)
-        : message(std::move(m))
-        , _id(i) {}
+namespace {
+    struct Msg {
+        Msg (std::string m, size_t i)
+            : message(std::move(m))
+            , _id(i) {}
 
-    std::string   message;
-    size_t        _id;
-};
-struct IdMsg: public Msg {
-    IdMsg(const Msg& m)
-            : Msg(m), id(m._id) {}
+        std::string   message;
+        size_t        _id;
+    };
+    struct IdMsg: public Msg {
+        IdMsg(const Msg& m)
+                : Msg(m), id(m._id) {}
 
-    size_t id;
-};
-struct WrappedMsg: public Msg {
-    WrappedMsg (std::string m, size_t i)
-        : Msg(std::move(m), i) {}
+        size_t id;
+    };
+    struct WrappedMsg: public Msg {
+        WrappedMsg (std::string m, size_t i)
+            : Msg(std::move(m), i) {}
 
-    [[nodiscard]] constexpr const auto& GetAggId() const { return _id;}
-    [[nodiscard]] bool  IsAggEqual (const Msg& other) const {
-        return (message == other.message);
+        [[nodiscard]] constexpr const auto& GetAggId() const { return _id;}
+        [[nodiscard]] bool  IsAggEqual (const Msg& other) const {
+            return (message == other.message);
+        }
+    };
+    using Msgs = std::vector<Msg>;
+
+    using MsgAgg = AggPipePub<WrappedMsg>;
+    using Upds = std::vector<MsgAgg::Upd>;
+
+    struct ExpUpd {
+        Msg           m;
+        AggUpdateType updateType = AggUpdateType::NONE;
+    };
+    using ExpUpds = std::vector<ExpUpd>;
+
+    using ClientRef = std::shared_ptr<PipeSubscriber<MsgAgg::Upd>>;
+
+    void MessagesMatch(ExpUpds& exp, Upds& got)
+    {
+        ASSERT_EQ(exp.size(), got.size());
+
+        for (size_t i = 0; i < exp.size(); ++i) {
+            const Msg& msg = exp[i].m;
+            const Msg& recvd = *got[i].data;
+            ASSERT_EQ(msg.message, recvd.message);
+            ASSERT_EQ(msg._id, recvd._id);
+
+            ASSERT_EQ(exp[i].updateType, got[i].updateType);
+        }
     }
-};
-using Msgs = std::vector<Msg>;
 
-using MsgAgg = AggPipePub<WrappedMsg>;
-using Upds = std::vector<MsgAgg::Upd>;
-
-struct ExpUpd {
-    Msg           m;
-    AggUpdateType updateType = AggUpdateType::NONE;
-};
-using ExpUpds = std::vector<ExpUpd>;
-
-using ClientRef = std::shared_ptr<PipeSubscriber<MsgAgg::Upd>>;
-
-void MessagesMatch(ExpUpds& exp, Upds& got)
-{
-    ASSERT_EQ(exp.size(), got.size());
-
-    for (size_t i = 0; i < exp.size(); ++i) {
-        const Msg& msg = exp[i].m;
-        const Msg& recvd = *got[i].data;
-        ASSERT_EQ(msg.message, recvd.message);
-        ASSERT_EQ(msg._id, recvd._id);
-
-        ASSERT_EQ(exp[i].updateType, got[i].updateType);
+    void Publish(MsgAgg& pub, const Msg& m) {
+        auto cpy = std::make_shared<WrappedMsg>(m.message, m._id);
+        pub.Update(std::move(cpy));
     }
-}
-
-void Publish(MsgAgg& pub, const Msg& m) {
-    auto cpy = std::make_shared<WrappedMsg>(m.message, m._id);
-    pub.Update(std::move(cpy));
-}
-void Publish(MsgAgg& pub, const Msgs& msgs) {
-    for (const Msg& m: msgs) {
-        Publish(pub, m);
+    void Publish(MsgAgg& pub, const Msgs& msgs) {
+        for (const Msg& m: msgs) {
+            Publish(pub, m);
+        }
     }
-}
 
-void GetMessages(const size_t toGet, ClientRef& cli, Upds& dest) {
-    MsgAgg::Upd upd;
-    for (size_t i = 0; i < toGet; ++i) {
-        ASSERT_TRUE(cli->GetNextMessage(upd));
-        dest.push_back(upd);
+    void GetMessages(const size_t toGet, ClientRef& cli, Upds& dest) {
+        MsgAgg::Upd upd;
+        for (size_t i = 0; i < toGet; ++i) {
+            ASSERT_TRUE(cli->GetNextMessage(upd));
+            dest.push_back(upd);
+        }
     }
+
+    void CheckClient(ClientRef client, ExpUpds& exp) {
+        Upds got;
+        ASSERT_NO_FATAL_FAILURE(GetMessages(exp.size(), client, got));
+        ASSERT_NO_FATAL_FAILURE(MessagesMatch(exp, got));
+    }
+
+    void PublishAndCheck (Msgs& toSend, ExpUpds& exp) {
+        MsgAgg pub;
+        ClientRef client = pub.NewClient(1024);
+
+        Publish(pub, toSend);
+        CheckClient(client, exp);
+    }
+
 }
-
-void CheckClient(ClientRef client, ExpUpds& exp) {
-    Upds got;
-    ASSERT_NO_FATAL_FAILURE(GetMessages(exp.size(), client, got));
-    ASSERT_NO_FATAL_FAILURE(MessagesMatch(exp, got));
-}
-
-void PublishAndCheck (Msgs& toSend, ExpUpds& exp) {
-    MsgAgg pub;
-    ClientRef client = pub.NewClient(1024);
-
-    Publish(pub, toSend);
-    CheckClient(client, exp);
-}
-
 /*
  * As updates for new items arrive, they are immediately
  * published to any subscribed clients. They'll be published
