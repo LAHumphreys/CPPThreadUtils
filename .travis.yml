@@ -12,7 +12,8 @@ addons:
       - g++-8
       - libboost-all-dev
       - valgrind
-
+   artifacts:
+     s3_region: "us-west-1" # defaults to "us-east-1"
 
 before_install:
   - export CXX="g++-8"
