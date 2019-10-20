@@ -12,6 +12,7 @@ addons:
       - g++-8
       - libboost-all-dev
       - valgrind
+      - lcov
 
 before_install:
   - export CXX="g++-8"
