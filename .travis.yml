@@ -5,6 +5,7 @@ addons:
     sources:
       - ubuntu-toolchain-r-test
       - boost-latest
+      
     packages:
       - cmake
       - cmake-data
@@ -21,8 +22,8 @@ before_install:
 install:
   - ./buildDeps.sh
   - pip install --user cpp-coveralls
-
-script:
+  
+script: 
   - ./buildFromDeps.sh
   - cd Build
   - make test
