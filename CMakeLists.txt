@@ -77,7 +77,7 @@ target_compile_features(worker PRIVATE cxx_std_17)
 # This works around a limitation of cpp-coveralls whereby it drops
 # the coverage of earlier runs for templated files.
 #
-add_executable(allTests allTests.cpp test/worker.cpp test/pipe.cpp test/agg.cpp)
+add_executable(allTests test/allTests.cpp)
 target_link_libraries(allTests PRIVATE ThreadComms UtilTime::Time GTest::GTest GTest::Main)
 target_compile_features(allTests PRIVATE cxx_std_17)
 

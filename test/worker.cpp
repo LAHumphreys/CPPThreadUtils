@@ -4,6 +4,27 @@
 
 using namespace nstimestamp;
 
+namespace WorkerUtils {
+    struct Msg {
+        Time t;
+        std::string message;
+    };
+
+    void MessagesMatch(const std::vector<Msg>& sent,
+                       const std::vector<Msg>& got)
+    {
+        bool match = true;
+        ASSERT_EQ(sent.size(), got.size());
+
+        for (size_t i = 0; match && i < sent.size(); ++i) {
+            const Msg& msg = sent[i];
+            const Msg& recvd = got[i];
+            ASSERT_EQ(msg.message, recvd.message);
+            ASSERT_EQ(msg.t.DiffUSecs(recvd.t), 0);
+        }
+    }
+}
+
 TEST(TWorker,PostSingleTask) {
     WorkerThread worker;
     worker.Start();
@@ -182,26 +203,9 @@ TEST(TWorker, WaitForTask) {
     ASSERT_NE(write_id, this_thread);
 }
 
-struct Msg {
-    Time t;
-    std::string message;
-};
-
-void MessagesMatch(const std::vector<Msg>& sent,
-                   const std::vector<Msg>& got)
-{
-    bool match = true;
-    ASSERT_EQ(sent.size(), got.size());
-
-    for (size_t i = 0; match && i < sent.size(); ++i) {
-        const Msg& msg = sent[i];
-        const Msg& recvd = got[i];
-        ASSERT_EQ(msg.message, recvd.message);
-        ASSERT_EQ(msg.t.DiffUSecs(recvd.t), 0);
-    }
-}
 
 TEST(TSubsriberWorker, SingleClient) {
+    using namespace WorkerUtils;
     PipePublisher<Msg> publisher;
     WorkerThread worker;
     std::vector<Msg> messages;
@@ -238,6 +242,7 @@ TEST(TSubsriberWorker, SingleClient) {
 }
 
 TEST(TSubsriberWorker, TwoClients) {
+    using namespace WorkerUtils;
     PipePublisher<Msg> publisher;
     WorkerThread worker;
     std::vector<Msg> messages;
@@ -315,6 +320,7 @@ TEST(TSubsriberWorker, TwoClients) {
 }
 
 TEST(TSubsriberWorker, SliceSize) {
+    using namespace WorkerUtils;
     PipePublisher<Msg> publisher;
     WorkerThread worker;
     std::vector<Msg> messages;
@@ -348,12 +354,12 @@ TEST(TSubsriberWorker, SliceSize) {
                 }
             };
 
-    std::function<void(Msg&)> task1 = [&f, &comms_mutex, &messages, &count1, &wait_for_complete, &toGet]
+    std::function<void(Msg&)> task1 = [&f, &count1, &wait_for_complete, &toGet]
                  (Msg& m) -> void {
                      f(count1, m,wait_for_complete,toGet,"ONE");
                  };
 
-    std::function<void(Msg&)> task2 = [&f, &comms_mutex, &messages, &count2, &wait_for_complete, &toGet]
+    std::function<void(Msg&)> task2 = [&f, &count2, &wait_for_complete, &toGet]
                  (Msg& m) -> void {
                      f(count2, m,wait_for_complete,toGet,"TWO");
                  };

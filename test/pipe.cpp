@@ -4,7 +4,7 @@
 
 using namespace std;
 
-namespace {
+namespace PipeUtils {
     struct Msg {
         std::string   message;
     };
@@ -24,6 +24,8 @@ namespace {
 }
 
 TEST(TPipePublisher,PublishSingleConsumer) {
+    using namespace PipeUtils;
+
     PipePublisher<Msg> publisher;
     std::shared_ptr<PipeSubscriber<Msg>> client(publisher.NewClient(1024));
     std::vector<Msg> toSend = {
@@ -50,6 +52,7 @@ TEST(TPipePublisher,PublishSingleConsumer) {
 }
 
 TEST(TPipeSubscriber,Notify) {
+    using namespace PipeUtils;
     PipePublisher<Msg> publisher;
     std::shared_ptr<PipeSubscriber<Msg>> client(publisher.NewClient(1024));
     std::vector<Msg> toSend = {
@@ -84,6 +87,7 @@ TEST(TPipeSubscriber,Notify) {
 }
 
 TEST(TPipeSubscriber,WaitForMessage) {
+    using namespace PipeUtils;
     PipePublisher<Msg> publisher;
     WorkerThread pushThread;
     std::shared_ptr<PipeSubscriber<Msg>> client(publisher.NewClient(1024));
@@ -116,6 +120,7 @@ TEST(TPipeSubscriber,WaitForMessage) {
 }
 
 TEST(TPipeSubscriber,BatchNotify) {
+    using namespace PipeUtils;
     PipePublisher<Msg> publisher;
     std::shared_ptr<PipeSubscriber<Msg>> client(publisher.NewClient(1024));
     std::vector<Msg> toSend = {
@@ -150,6 +155,7 @@ TEST(TPipeSubscriber,BatchNotify) {
 }
 
 TEST(TPipeSubscriber,PostNotify) {
+    using namespace PipeUtils;
     PipePublisher<Msg> publisher;
     std::shared_ptr<PipeSubscriber<Msg>> client(publisher.NewClient(1024));
     std::vector<Msg> toSend = {
@@ -208,6 +214,7 @@ TEST(TPipeSubscriber,PostNotify) {
 }
 
 TEST(TPipePublisher,DoubleConsumer) {
+    using namespace PipeUtils;
     PipePublisher<Msg> publisher;
     std::shared_ptr<PipeSubscriber<Msg>> client(publisher.NewClient(1024));
     std::vector<Msg> toSend = {
@@ -267,6 +274,7 @@ TEST(TPipePublisher,DoubleConsumer) {
 }
 
 TEST(TPipeSubscriber,ForEachData) {
+    using namespace PipeUtils;
     PipePublisher<Msg> publisher;
     std::shared_ptr<PipeSubscriber<Msg>> client(publisher.NewClient(1024));
     std::vector<Msg> toSend = {
@@ -290,6 +298,7 @@ TEST(TPipeSubscriber,ForEachData) {
 }
 
 TEST(TPipeSubscriber,InitialData) {
+    using namespace PipeUtils;
     PipePublisher<Msg> publisher;
     std::vector<Msg> toSend = {
             {"Message 1"},
@@ -310,6 +319,7 @@ TEST(TPipeSubscriber,InitialData) {
 }
 
 TEST(TPipeSubscriber,BatchForEachData) {
+    using namespace PipeUtils;
     PipePublisher<Msg> publisher;
     std::shared_ptr<PipeSubscriber<Msg>> client(publisher.NewClient(1024));
     std::vector<Msg> toSend = {
@@ -334,6 +344,7 @@ TEST(TPipeSubscriber,BatchForEachData) {
 }
 
 TEST(TIPipeConsumer,CustomHandler) {
+    using namespace PipeUtils;
     PipePublisher<Msg> publisher;
     class Handler: public IPipeConsumer<Msg> {
     public:
@@ -360,6 +371,7 @@ TEST(TIPipeConsumer,CustomHandler) {
 }
 
 TEST(TIPipeConsumer,CustomBatchHandler) {
+    using namespace PipeUtils;
     PipePublisher<Msg> publisher;
     class Handler: public IPipeConsumer<Msg> {
     public:
@@ -413,6 +425,7 @@ TEST(TIPipeConsumer,CustomBatchHandler) {
 }
 
 TEST(TIPipeConsumer,CustomBatchReset) {
+    using namespace PipeUtils;
     std::unique_ptr<PipePublisher<Msg>> publisher(new PipePublisher<Msg>);
     class Handler: public IPipeConsumer<Msg> {
     public:
@@ -453,6 +466,7 @@ TEST(TIPipeConsumer,CustomBatchReset) {
 }
 
 TEST(TPipePublisher,InstallCustomHandler) {
+    using namespace PipeUtils;
     PipePublisher<Msg> publisher;
     class Handler: public IPipeConsumer<Msg> {
     public:
@@ -479,6 +493,7 @@ TEST(TPipePublisher,InstallCustomHandler) {
 }
 
 TEST(TPipeSubscriber,ForEachDataUnread) {
+    using namespace PipeUtils;
     PipePublisher<Msg> publisher;
     std::shared_ptr<PipeSubscriber<Msg>> client(publisher.NewClient(1024));
     std::vector<Msg> toSend = {
@@ -517,6 +532,7 @@ TEST(TPipeSubscriber,ForEachDataUnread) {
 }
 
 TEST(PipeSubscriber,Abort) {
+    using namespace PipeUtils;
     PipePublisher<Msg> publisher;
     std::shared_ptr<PipeSubscriber<Msg>> client(publisher.NewClient(1024));
     std::vector<Msg> toSend = {
@@ -548,6 +564,7 @@ TEST(PipeSubscriber,Abort) {
 }
 
 TEST(TIPipeConsumer,CustomAbort) {
+    using namespace PipeUtils;
     PipePublisher<Msg> publisher;
 
     class Handler: public IPipeConsumer<Msg> {
@@ -584,6 +601,7 @@ TEST(TIPipeConsumer,CustomAbort) {
 }
 
 TEST(TIPipeConsumer,CustomBatchDone) {
+    using namespace PipeUtils;
     PipePublisher<Msg> publisher;
 
     class Handler: public IPipeConsumer<Msg> {
@@ -639,6 +657,7 @@ TEST(TIPipeConsumer,CustomBatchDone) {
 }
 
 TEST(TPipeSubscriber,AbortNotify) {
+    using namespace PipeUtils;
     PipePublisher<Msg> publisher;
     std::shared_ptr<PipeSubscriber<Msg>> client(publisher.NewClient(1024));
     std::vector<Msg> toSend = {
@@ -680,6 +699,7 @@ TEST(TPipeSubscriber,AbortNotify) {
 }
 
 TEST(TPipeSubscriber,AbortForEachData) {
+    using namespace PipeUtils;
     PipePublisher<Msg> publisher;
     std::shared_ptr<PipeSubscriber<Msg>> client(publisher.NewClient(1024));
     std::vector<Msg> toSend = {
@@ -708,6 +728,7 @@ TEST(TPipeSubscriber,AbortForEachData) {
 }
 
 TEST(TPipeSubscriber,AbortForEachDataUnread) {
+    using namespace PipeUtils;
     PipePublisher<Msg> publisher;
     std::shared_ptr<PipeSubscriber<Msg>> client(publisher.NewClient(1024));
     std::vector<Msg> toSend = {
@@ -745,6 +766,7 @@ TEST(TPipeSubscriber,AbortForEachDataUnread) {
 }
 
 TEST(TPipeSubscriber,AbortHandleDestruction) {
+    using namespace PipeUtils;
     PipePublisher<Msg> publisher;
     std::shared_ptr<PipeSubscriber<Msg>> client(publisher.NewClient(1024));
     std::vector<Msg> toSend = {

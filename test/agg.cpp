@@ -10,7 +10,7 @@
 using namespace std;
 using namespace nstimestamp;
 
-namespace {
+namespace AggUtils {
     struct Msg {
         Msg (std::string m, size_t i)
             : message(std::move(m))
@@ -100,6 +100,8 @@ namespace {
  * with an updateType of NEW
  */
 TEST(TAggPuplisher,NewItems) {
+    using namespace AggUtils;
+    using namespace AggUtils;
     Msgs toSend{
         Msg{"Hello World!", 0},
         Msg{"A new message", 1},
@@ -121,6 +123,8 @@ TEST(TAggPuplisher,NewItems) {
  * is published to clients with an updateType of UPDATE
  */
 TEST(TAggPuplisher,UpdatedItems) {
+    using namespace AggUtils;
+    using namespace AggUtils;
     Msgs toSend {
         Msg{"Hello World!", 0},
         Msg{"A new message", 1},
@@ -144,6 +148,7 @@ TEST(TAggPuplisher,UpdatedItems) {
  * The Msg is not required to provide a diffing util.
  */
 TEST(TAggPuplisher,UpdatedItems_NoDiffing) {
+    using namespace AggUtils;
     Msgs toSend {
             Msg{"Hello World!", 0},
             Msg{"A new message", 1},
@@ -182,6 +187,7 @@ TEST(TAggPuplisher,UpdatedItems_NoDiffing) {
  *
  */
 TEST(TAggPuplisher,NoDiffNoUpdate) {
+    using namespace AggUtils;
     Msgs toSend {
             Msg{"Hello World!", 0},
             Msg{"A new message", 1},
@@ -203,6 +209,7 @@ TEST(TAggPuplisher,NoDiffNoUpdate) {
 }
 
 TEST(TAggPuplisher,LateSubscriber) {
+    using namespace AggUtils;
     Msgs toSend {
             Msg{"Hello World!", 0},
             Msg{"A new message", 1},
@@ -248,6 +255,7 @@ TEST(TAggPuplisher,LateSubscriber) {
  * without trying to force any potential race conditions
  */
 TEST(TAggPuplisherThreads,BasicFlow) {
+    using namespace AggUtils;
     WorkerThread pubThread;
     WorkerThread clientThread;
     WorkerThread lateClientThread;
@@ -333,6 +341,7 @@ TEST(TAggPuplisherThreads,BasicFlow) {
  * - as a result, a simple lock around the data store is acceptable.
  */
 TEST(TAggPuplisherThreads,LastSubFastPubRace) {
+    using namespace AggUtils;
     struct IdStamp {
         IdStamp (size_t id)
           : id(id)
