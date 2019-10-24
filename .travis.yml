@@ -9,15 +9,15 @@ addons:
     packages:
       - cmake
       - cmake-data
-      - g++-8
+      - g++-9
       - libboost-all-dev
       - valgrind
       - lcov
 
 before_install:
-  - export CXX="g++-8"
-  - export CC="gcc-8"
-  - g++-8 --version
+  - export CXX="g++-9"
+  - export CC="gcc-9"
+  - g++-9 --version
 
 install:
   - ./buildDeps.sh
