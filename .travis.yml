@@ -30,4 +30,4 @@ script:
   - make test
   - ctest -T Memcheck
   - cd ..
-  - COVERALLS_FLAGS="--dump --verbose" ./deps/CMakeUtils/travis/doCoverage.sh
+  - COVERALLS_FLAGS="" ./deps/CMakeUtils/travis/doCoverage.sh
