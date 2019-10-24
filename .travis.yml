@@ -9,25 +9,20 @@ addons:
     packages:
       - cmake
       - cmake-data
-      - g++-7
+      - g++-9
       - libboost-all-dev
       - valgrind
       - libperlio-gzip-perl
       - libjson-perl
 
 before_install:
-  - export CXX="g++-7"
-  - export CC="gcc-7"
-  - g++-7 --version
+  - export CXX="g++-9"
+  - export CC="gcc-9"
+  - g++-9 --version
 
 install:
   - ./buildDeps.sh
   - pip install --user cpp-coveralls
-  
-script: 
-  - ./buildFromDeps.sh
-  - cd Build
-  - make test
-  - ctest -T Memcheck
-  - cd ..
-  - GCOV="gcov-7" COVERALLS_FLAGS="" ./deps/CMakeUtils/travis/doCoverage.sh
+
+script:
+  - GCOV="gcov-9" COVERALLS_FLAGS="--verbose" ./deps/CMakeUtils/travis/doCoverage.sh
