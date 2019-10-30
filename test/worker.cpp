@@ -185,6 +185,39 @@ TEST(TWorker, WaitForTask) {
     ASSERT_NE(write_id, this_thread);
 }
 
+TEST(TWorker, NoRestart_NoParallelStart) {
+    WorkerThread targetThread;
+    std::vector<WorkerThread> contendingThreads(20);
+
+    std::atomic<size_t> hits(0);
+    std::atomic<bool> running;
+
+    for (auto& contendingThread: contendingThreads) {
+        contendingThread.PostTask([&] () -> void {
+            if (targetThread.Start()) {
+                ++hits;
+            }
+        });
+    }
+    for (auto& contendingThread: contendingThreads) {
+        contendingThread.Start();
+    }
+
+    // flush the threads
+    for (auto& contendingThread: contendingThreads) {
+        contendingThread.DoTask([&] () -> void { });
+    }
+
+    ASSERT_EQ(hits, 1);
+
+    targetThread.DoTask([&] () -> void {
+        running = true;
+    });
+
+    // check it started ok
+    ASSERT_TRUE(running);
+}
+
 // The state model currently can't handle a second start
 TEST(TWorker, NoRestart_WhilstRunning) {
     std::promise<bool> finishFlag, startFlag;
