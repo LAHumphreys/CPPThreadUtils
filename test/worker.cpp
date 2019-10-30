@@ -239,6 +239,22 @@ TEST(TWorker, NoRestart_AfterAbort) {
 
 }
 
+TEST(TWorker, OnThread) {
+    WorkerThread worker, other;
+    ASSERT_FALSE(worker.CurrentlyOnWorkerThread());
+
+    worker.Start();
+    worker.DoTask([&] () -> void {
+        ASSERT_TRUE(worker.CurrentlyOnWorkerThread());
+    });
+    ASSERT_FALSE(worker.CurrentlyOnWorkerThread());
+
+    other.Start();
+    other.DoTask([&] () -> void {
+        ASSERT_FALSE(worker.CurrentlyOnWorkerThread());
+    });
+}
+
 struct Msg {
     Time t;
     std::string message;

@@ -159,6 +159,10 @@ void WorkerThread::Sleep(std::unique_lock<std::mutex>& lock) {
     }
 }
 
+bool WorkerThread::CurrentlyOnWorkerThread() const {
+    return (state != NOT_STARTED) && (std::this_thread::get_id() == worker.get_id());
+}
+
 void WorkerThread::Job::Cancel() {
     if (promised) {
         result.set_value(false);
