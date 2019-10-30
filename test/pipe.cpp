@@ -1,3 +1,14 @@
+/*
+ *  PipePublisher -> PipeSubscriber: Workflow Definitions
+ *
+ *  The tests in this suite describe functionally the expected behaviour of the PipePublisher.
+ *
+ *  NOTE: The technical implementation of the PipeSubscriber uses a state model in order
+ *        to remain lock free wherever possible (This delivers a much improved throughput
+ *        under load, when publishing to a dedicated WorkerThread). As a result these simple
+ *        functional tests are not sufficient on themselves to guarantee the behaviour in all
+ *        cases. These thornier cases are covered in the pipe_state_model.cpp suite.
+ */
 #include <PipePublisher.h>
 #include <gtest/gtest.h>
 #include <WorkerThread.h>
@@ -8,19 +19,26 @@ struct Msg {
     std::string   message;
 };
 
-void MessagesMatch(std::vector<Msg>& sent,
-                   std::vector<Msg>& got)
+void MessagesMatch(const std::vector<Msg>& expected,
+                   const std::vector<Msg>& got)
 {
-    ASSERT_EQ(sent.size(), got.size());
+    ASSERT_EQ(expected.size(), got.size());
 
-    for (size_t i = 0; i < sent.size(); ++i) {
-        Msg& msg = sent[i];
-        Msg& recvd = got[i];
+    for (size_t i = 0; i < expected.size(); ++i) {
+        const Msg& msg = expected[i];
+        const Msg& recvd = got[i];
 
         ASSERT_EQ(msg.message, recvd.message);
     }
 }
 
+/**
+ * Subscriber reads *after* publisher has finished
+ *
+ * Simplest possible case:
+ *    - Publisher loads up the queue
+ *    - Sometime later, the subscriber fully consumes the queue
+ */
 TEST(TPipePublisher,PublishSingleConsumer) {
     PipePublisher<Msg> publisher;
     std::shared_ptr<PipeSubscriber<Msg>> client(publisher.NewClient(1024));
@@ -47,7 +65,32 @@ TEST(TPipePublisher,PublishSingleConsumer) {
     MessagesMatch(toSend,got);
 }
 
-TEST(TPipeSubscriber,Notify) {
+/**
+ * OnNextMessage [NoTargetThread]: Use Next Message Interface to trigger code when the next message is available
+ *
+ *  The OnNextMessage interface allows the consumer to install some code to be
+ *  triggered upon the next available message. (If there's already a message waiting, then the code
+ *  will be triggered immediately). If a message hook was previously installed, this new hook
+ *  replaces the old one (unless the previous hook is already being executed by the publisher thread,
+ *  in which case it will be installed *after* completion of the old hook).
+ *
+ *  NOTE: The consumer has not provided an IPostable interface - which means it is undefined what
+ *        thread will execute the code. There are 3 *functional* possibilities, although in terms
+ *        of state model its more complicated (see also the state model test suite).
+ *           1. There is already a message waiting - in which case this will be triggered immediately
+ *              (within the current function call).
+ *           2. There are no new messages - the publisher will invoke the trigger code
+ *              (on the publisher thread), immediately after it has written the next message
+ *              to the queue
+ *           3. There was already a call-back installed, and its currently being executed by the
+ *               publisher thread. In which case installation is deferred until after the current
+ *               trigger has completed. At that point the trigger will be invoked as per (2)
+ */
+
+
+// See note on OnNextMessge [NoTargetThread] above.
+//   Case 1: Messages already waiting
+TEST(TPipeSubscriber,Notify_ExistingMessages) {
     PipePublisher<Msg> publisher;
     std::shared_ptr<PipeSubscriber<Msg>> client(publisher.NewClient(1024));
     std::vector<Msg> toSend = {
@@ -64,21 +107,85 @@ TEST(TPipeSubscriber,Notify) {
         }
     };
     
+    for (auto& msg : toSend ) {
+        publisher.Publish(msg);
+    }
+
+    client->OnNextMessage(f);
+
+    ASSERT_NO_FATAL_FAILURE(MessagesMatch(toSend,got));
+}
+
+// See note on OnNextMessge [NoTargetThread] above.
+//   Case 2: Publisher will trigger on next write
+TEST(TPipeSubscriber,Notify_OnNextWrite) {
+    PipePublisher<Msg> publisher;
+    std::shared_ptr<PipeSubscriber<Msg>> client(publisher.NewClient(1024));
+    std::vector<Msg> toSend = {
+            {"Message 1"},
+            {"Mesasge 2"},
+            {"Hello World!"}
+    };
+
+    std::vector<Msg> got;
+    auto f = [&] () -> void {
+        Msg recvMsg;
+        while(client->GetNextMessage(recvMsg)) {
+            got.push_back(recvMsg);
+        }
+    };
+
     client->OnNextMessage(f);
 
     for (auto& msg : toSend ) {
         publisher.Publish(msg);
     }
 
-    std::vector<Msg> expected = {
-        {"Message 1"}
-    };
-
+    std::vector<Msg> expected = { toSend[0] };
     ASSERT_NO_FATAL_FAILURE(MessagesMatch(expected,got));
+}
 
-    client->OnNextMessage(f);
+// See note on OnNextMessge [NoTargetThread] above.
+//   Case 3: Publisher will configure when the current trigger is complete
+TEST(TPipeSubscriber,Notify_FollowOnTrigger) {
+    std::vector<Msg> toSend = {
+            {"Message 1"},
+            {"Mesasge 2"}
+    };
+    std::vector<Msg> got;
 
-    ASSERT_NO_FATAL_FAILURE(MessagesMatch(toSend,got));
+    PipePublisher<Msg> publisher;
+    auto client = publisher.NewClient(1024);
+
+    WorkerThread clientThread;
+    clientThread.Start();
+
+    // Install an initial trigger, in this somewhat contrived case, all
+    // it does is install the real trigger
+    clientThread.DoTask([&] () -> void {
+        auto consumeMessages = [&] () -> void {
+            Msg msg;
+            while (client->GetNextMessage(msg)) {
+                got.push_back(msg);
+            }
+        };
+
+        client->OnNextMessage([=, &client, &clientThread] () -> void {
+            // Only the client thread is allowed to install these...
+            // It is safe to make a blocking call
+            clientThread.DoTask([=, &client] () -> void {
+                client->OnNextMessage(consumeMessages);
+            });
+        });
+    });
+
+    // First trigger only resets the trigger, nothing actually recieved
+    publisher.Publish(toSend[0]);
+    ASSERT_NO_FATAL_FAILURE(MessagesMatch({},got));
+
+    // Second trigger only pull all the messages
+    publisher.Publish(toSend[1]);
+    ASSERT_NO_FATAL_FAILURE(MessagesMatch({toSend[0], toSend[1]},got));
 }
 
 TEST(TPipeSubscriber,WaitForMessage) {

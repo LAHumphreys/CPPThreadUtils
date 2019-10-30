@@ -427,7 +427,8 @@ void PipeSubscriber<Message, NewMessageCallback>::NotifyConfigured() {
                 break;
 
             case PUB_RECONFIGURING:
-                // Fine - complete the reconfigure
+                // Even if there are messages in the queue, this is fine. The publisher notified its
+                // last write, which means there's nothing new to notify.
                 action = NOTHING;
                 newState = NOTHING_TO_NOTIFY;
                 break;
