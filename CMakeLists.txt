@@ -63,6 +63,10 @@ add_executable(pipe test/pipe.cpp)
 target_link_libraries(pipe ThreadComms GTest::GTest GTest::Main)
 target_compile_features(pipe PRIVATE cxx_std_17)
 
+add_executable(pipe_state_model test/pipe_state_model.cpp)
+target_link_libraries(pipe_state_model ThreadComms GTest::GTest GTest::Main)
+target_compile_features(pipe_state_model PRIVATE cxx_std_17)
+
 add_executable(agg test/agg.cpp include/AggPipePub.h)
 target_link_libraries(agg ThreadComms UtilTime::Time GTest::GTest GTest::Main)
 target_compile_features(agg PRIVATE cxx_std_17)
@@ -80,6 +84,7 @@ include (CTest)
 
 enable_testing()
 add_test(pipe pipe)
+add_test(pipe_state_model pipe_state_model)
 add_test(agg agg)
 add_test(worker worker)
 

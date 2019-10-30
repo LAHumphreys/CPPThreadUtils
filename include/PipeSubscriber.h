@@ -123,7 +123,8 @@ private:
  * pipe.
  */
 template <class Message,
-          class NewMessageCallback = std::function<void(const Message&)> >
+         class NextMessageCallback = std::function<void()>,
+         class NewMessageCallback = std::function<void(const Message&)> >
 class PipeSubscriber: public IPipeConsumer<Message> {
 public:
 
@@ -170,7 +171,6 @@ public:
      * NOTE: This callback may be triggered immediately (before returning) on
      *        the current thread if there is already unread data on the queue.
      */
-    typedef std::function<void(void)> NextMessageCallback;
     void OnNextMessage(const NextMessageCallback& f);
 
     /**

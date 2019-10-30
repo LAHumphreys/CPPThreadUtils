@@ -45,8 +45,8 @@ bool IPipeConsumer<Message>::ChangeState(STATE& current, STATE to) {
     return ok;
 }
 
-template<class Message, class NewMessageCallback>
-PipeSubscriber<Message, NewMessageCallback>::PipeSubscriber(
+template<class Message, class NextMessageCallback, class NewMessageCallback>
+PipeSubscriber<Message, NextMessageCallback, NewMessageCallback>::PipeSubscriber(
     PipePublisher<Message>* _parent,
     size_t maxSize,
     std::vector<Message> initialData)
@@ -64,16 +64,16 @@ PipeSubscriber<Message, NewMessageCallback>::PipeSubscriber(
     }
 }
 
-template<class Message, class NewMessageCallback>
-PipeSubscriber<Message, NewMessageCallback>::~PipeSubscriber() {
+template<class Message, class NextMessageCallback, class NewMessageCallback>
+PipeSubscriber<Message, NextMessageCallback, NewMessageCallback>::~PipeSubscriber() {
     IPipeConsumer<Message>::Abort();
     if (batching) {
-        PipeSubscriber<Message, NewMessageCallback>::EndBatch();
+        PipeSubscriber<Message, NextMessageCallback, NewMessageCallback>::EndBatch();
     }
 }
 
-template<class Message, class NewMessageCallback>
-void PipeSubscriber<Message, NewMessageCallback>::PushComplete()
+template<class Message, class NextMessageCallback, class NewMessageCallback>
+void PipeSubscriber<Message, NextMessageCallback, NewMessageCallback>::PushComplete()
 {
     bool handled = false;
     enum ACTION {
@@ -169,8 +169,8 @@ void PipeSubscriber<Message, NewMessageCallback>::PushComplete()
 
 }
 
-template<class Message, class NewMessageCallback>
-void PipeSubscriber<Message, NewMessageCallback>::PublishComplete()
+template<class Message, class NextMessageCallback, class NewMessageCallback>
+void PipeSubscriber<Message, NextMessageCallback, NewMessageCallback>::PublishComplete()
 {
     bool handled = false;
     enum ACTION {
@@ -266,9 +266,9 @@ void PipeSubscriber<Message, NewMessageCallback>::PublishComplete()
 
 }
 
-template<class Message, class NewMessageCallback>
-typename PipeSubscriber<Message, NewMessageCallback>::CONFIGURE_ACTION
-PipeSubscriber<Message, NewMessageCallback>::NotifyRequested()
+template<class Message, class NextMessageCallback, class NewMessageCallback>
+typename PipeSubscriber<Message, NextMessageCallback, NewMessageCallback>::CONFIGURE_ACTION
+PipeSubscriber<Message, NextMessageCallback, NewMessageCallback>::NotifyRequested()
 {
     bool handled = false;
     enum ACTION {
@@ -375,8 +375,8 @@ PipeSubscriber<Message, NewMessageCallback>::NotifyRequested()
     return op;
 }
 
-template<class Message, class NewMessageCallback>
-void PipeSubscriber<Message, NewMessageCallback>::NotifyConfigured() {
+template<class Message, class NextMessageCallback, class NewMessageCallback>
+void PipeSubscriber<Message, NextMessageCallback, NewMessageCallback>::NotifyConfigured() {
     bool handled = false;
     enum ACTION {
         NOTHING,
@@ -485,8 +485,8 @@ void PipeSubscriber<Message, NewMessageCallback>::NotifyConfigured() {
     }
 }
 
-template<class Message, class NewMessageCallback>
-void PipeSubscriber<Message, NewMessageCallback>::NotifyPendingConfigured() {
+template<class Message, class NextMessageCallback, class NewMessageCallback>
+void PipeSubscriber<Message, NextMessageCallback, NewMessageCallback>::NotifyPendingConfigured() {
     bool handled = false;
 
     enum ACTION {
@@ -558,8 +558,8 @@ void PipeSubscriber<Message, NewMessageCallback>::NotifyPendingConfigured() {
     }
 }
 
-template<class Message, class NewMessageCallback>
-void PipeSubscriber<Message, NewMessageCallback>::PullComplete()
+template<class Message, class NextMessageCallback, class NewMessageCallback>
+void PipeSubscriber<Message, NextMessageCallback, NewMessageCallback>::PullComplete()
 {
     enum ACTION {
         NOTHING,
@@ -633,27 +633,27 @@ void PipeSubscriber<Message, NewMessageCallback>::PullComplete()
     }
 }
 
-template<class Message, class NewMessageCallback>
-void PipeSubscriber<Message, NewMessageCallback>::WakeWaiter() {
+template<class Message, class NextMessageCallback, class NewMessageCallback>
+void PipeSubscriber<Message, NextMessageCallback, NewMessageCallback>::WakeWaiter() {
     onNotifyFlag.notify_one();
 }
 
-template<class Message, class NewMessageCallback>
-void PipeSubscriber<Message, NewMessageCallback>::WaitForWake() {
+template<class Message, class NextMessageCallback, class NewMessageCallback>
+void PipeSubscriber<Message, NextMessageCallback, NewMessageCallback>::WaitForWake() {
     Lock lock(onNotifyMutex);
     onNotifyFlag.wait(lock);
 }
 
-template<class Message, class NewMessageCallback>
-void PipeSubscriber<Message, NewMessageCallback>::ConfigurePendingNotify(const THREAD& thread) {
+template<class Message, class NextMessageCallback, class NewMessageCallback>
+void PipeSubscriber<Message, NextMessageCallback, NewMessageCallback>::ConfigurePendingNotify(const THREAD& thread) {
     onNotify = std::move(pending_onNotify);
     targetToNotify = pending_targetToNotify;
     pending_targetToNotify = nullptr;
     NotifyConfigured();
 }
 
-template<class Message, class NewMessageCallback>
-void PipeSubscriber<Message, NewMessageCallback>::PublishNextMessage() {
+template<class Message, class NextMessageCallback, class NewMessageCallback>
+void PipeSubscriber<Message, NextMessageCallback, NewMessageCallback>::PublishNextMessage() {
     if (targetToNotify) {
         targetToNotify->PostTask(onNotify);
         targetToNotify = nullptr;
@@ -664,8 +664,8 @@ void PipeSubscriber<Message, NewMessageCallback>::PublishNextMessage() {
     PublishComplete();
 }
 
-template<class Message, class NewMessageCallback>
-void PipeSubscriber<Message, NewMessageCallback>::PullNextMessage() {
+template<class Message, class NextMessageCallback, class NewMessageCallback>
+void PipeSubscriber<Message, NextMessageCallback, NewMessageCallback>::PullNextMessage() {
     if (targetToNotify) {
         targetToNotify->PostTask(onNotify);
         targetToNotify = nullptr;
@@ -676,8 +676,8 @@ void PipeSubscriber<Message, NewMessageCallback>::PullNextMessage() {
     PullComplete();
 }
 
-template<class Message, class NewMessageCallback>
-void PipeSubscriber<Message, NewMessageCallback>::PushMessage(const Message& msg) {
+template<class Message, class NextMessageCallback, class NewMessageCallback>
+void PipeSubscriber<Message, NextMessageCallback, NewMessageCallback>::PushMessage(const Message& msg) {
     /**
      * Remember, only one thread is allowed to publish...
      */
@@ -702,8 +702,8 @@ void PipeSubscriber<Message, NewMessageCallback>::PushMessage(const Message& msg
     }
 }
 
-template<class Message, class NewMessageCallback>
-void PipeSubscriber<Message, NewMessageCallback>::OnStateChange() {
+template<class Message, class NextMessageCallback, class NewMessageCallback>
+void PipeSubscriber<Message, NextMessageCallback, NewMessageCallback>::OnStateChange() {
     typename IPipeConsumer<Message>::STATE state = this->State();
     if (state == IPipeConsumer<Message>::ABORTING)
     {
@@ -727,8 +727,8 @@ void PipeSubscriber<Message, NewMessageCallback>::OnStateChange() {
     }
 }
 
-template<class Message, class NewMessageCallback>
-bool PipeSubscriber<Message, NewMessageCallback>::GetNextMessage(Message& msg) {
+template<class Message, class NextMessageCallback, class NewMessageCallback>
+bool PipeSubscriber<Message, NextMessageCallback, NewMessageCallback>::GetNextMessage(Message& msg) {
     bool gotMsg = false;
     if ( messages.pop(msg) ) {
         gotMsg = true;
@@ -737,8 +737,8 @@ bool PipeSubscriber<Message, NewMessageCallback>::GetNextMessage(Message& msg) {
     return gotMsg;
 }
 
-template<class Message, class NewMessageCallback>
-bool PipeSubscriber<Message, NewMessageCallback>::WaitForMessage(Message &msg) {
+template<class Message, class NextMessageCallback, class NewMessageCallback>
+bool PipeSubscriber<Message, NextMessageCallback, NewMessageCallback>::WaitForMessage(Message &msg) {
     bool gotMsg = GetNextMessage(msg);
     if (!gotMsg) {
         bool complete = Complete();
@@ -769,26 +769,26 @@ bool PipeSubscriber<Message, NewMessageCallback>::WaitForMessage(Message &msg) {
 }
 
 
-template<class Message, class NewMessageCallback>
-void PipeSubscriber<Message, NewMessageCallback>::OnNextMessage(const NextMessageCallback& f) {
+template<class Message, class NextMessageCallback, class NewMessageCallback>
+void PipeSubscriber<Message, NextMessageCallback, NewMessageCallback>::OnNextMessage(const NextMessageCallback& f) {
     this->OnNextMessage(f,nullptr);
 }
 
-template<class Message, class NewMessageCallback>
-void PipeSubscriber<Message, NewMessageCallback>::StartBatch() {
+template<class Message, class NextMessageCallback, class NewMessageCallback>
+void PipeSubscriber<Message, NextMessageCallback, NewMessageCallback>::StartBatch() {
     batching = true;
 }
 
-template<class Message, class NewMessageCallback>
-void PipeSubscriber<Message, NewMessageCallback>::EndBatch() {
+template<class Message, class NextMessageCallback, class NewMessageCallback>
+void PipeSubscriber<Message, NextMessageCallback, NewMessageCallback>::EndBatch() {
     if (batching) {
         this->PushComplete();
         batching = false;
     }
 }
 
-template<class Message, class NewMessageCallback>
-void PipeSubscriber<Message, NewMessageCallback>::OnNextMessage(
+template<class Message, class NextMessageCallback, class NewMessageCallback>
+void PipeSubscriber<Message, NextMessageCallback, NewMessageCallback>::OnNextMessage(
          const NextMessageCallback& f,
          IPostable* target)
 {
@@ -812,8 +812,8 @@ void PipeSubscriber<Message, NewMessageCallback>::OnNextMessage(
     }
 }
 
-template<class Message, class NewMessageCallback>
-void PipeSubscriber<Message, NewMessageCallback>::OnNewMessage(const NewMessageCallback& f) {
+template<class Message, class NextMessageCallback, class NewMessageCallback>
+void PipeSubscriber<Message, NextMessageCallback, NewMessageCallback>::OnNewMessage(const NewMessageCallback& f) {
     if (!this->aborted) {
         Lock notifyLock(onNotifyMutex);
 
@@ -823,8 +823,8 @@ void PipeSubscriber<Message, NewMessageCallback>::OnNewMessage(const NewMessageC
     }
 }
 
-template<class Message, class NewMessageCallback>
-bool PipeSubscriber<Message, NewMessageCallback>::Complete() const {
+template<class Message, class NextMessageCallback, class NewMessageCallback>
+bool PipeSubscriber<Message, NextMessageCallback, NewMessageCallback>::Complete() const {
     auto state = this->State();
     return (state == IPipeConsumer<Message>::FINSIHED ||
             state == IPipeConsumer<Message>::ABORTED);
