@@ -122,7 +122,8 @@ private:
  * onMessage notification. (Choosing not to use trigger results in a lockless
  * pipe.
  */
-template <class Message>
+template <class Message,
+          class NewMessageCallback = std::function<void(const Message&)> >
 class PipeSubscriber: public IPipeConsumer<Message> {
 public:
 
@@ -195,8 +196,7 @@ public:
      * NOTE: To preserve ordering this function will lock out the publisher thread
      *       until call-backss for all existing messages haeve been completed.
      */
-    typedef std::function<void(const Message&)> NewMessasgCallback;
-    void OnNewMessage(const NewMessasgCallback&  f);
+    void OnNewMessage(const NewMessageCallback&  f);
 
     /*
      * Has the publisher finished?
@@ -343,7 +343,7 @@ private:
     /***********************************
      * Forward Messages
      ***********************************/
-    NewMessasgCallback   onNewMessage;
+    NewMessageCallback   onNewMessage;
     std::atomic<bool>    forwardMessage;
 
     /*********************************
