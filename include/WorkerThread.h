@@ -49,8 +49,9 @@ public:
 
     /**
      * Start the worker
+     *  @returns true - the tread was successfully started, false otherwise
      */
-    void Start();
+    bool Start();
 
     /**
      * Join the thread
@@ -85,6 +86,11 @@ public:
         const std::function<void (Msg& m)>& task,
         size_t maxQueueSize = 1000000,
         size_t maxSlizeSize = 100);
+
+    /**
+     * Check if this function was invoked on the actual thread
+     */
+    bool CurrentlyOnWorkerThread() const;
 
 private:
     enum STATE {NOT_STARTED, RUNNING, SLEEPING, STOPPED, ABORTED};
@@ -173,7 +179,7 @@ private:
     std::mutex                   queueMutex;
     std::condition_variable      notification;
     std::list<Job>               workQueue;
-    STATE                        state;
+    std::atomic<STATE>           state;
     std::thread                  worker;
 
     std::vector<std::shared_ptr<void>> clients;
