@@ -131,6 +131,31 @@ TEST(TWorker,ExternalAbort) {
     ASSERT_EQ(target2, 0);
 }
 
+TEST(TWorker,Abort_WaitingJob) {
+    std::promise<bool> readyToAbort;
+    std::promise<bool> taskResult;
+
+    WorkerThread eventLoop;
+    WorkerThread clientThread;
+
+    eventLoop.Start();
+    eventLoop.PostTask([&] () -> void {
+        if (readyToAbort.get_future().get()) {
+            std::this_thread::yield();
+            std::this_thread::sleep_for(10us);
+            std::this_thread::yield();
+            eventLoop.Abort();
+        }
+    });
+    clientThread.Start();
+    clientThread.PostTask([&] () -> void {
+        readyToAbort.set_value((true));
+        taskResult.set_value( eventLoop.DoTask([] () -> void { }) );
+    });
+
+    ASSERT_FALSE(taskResult.get_future().get());
+}
+
 TEST(TWorker, InternalAbort) {
     WorkerThread worker;
     size_t target1 = 0;
