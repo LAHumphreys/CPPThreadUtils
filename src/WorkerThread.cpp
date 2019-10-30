@@ -1,5 +1,5 @@
 /*
- * WorkerThread.cpp
+
  *
  *  Created on: 24 Jan 2016
  *      Author: lhumphreys
@@ -90,12 +90,16 @@ void WorkerThread::Abort() {
     Wake(ABORTED);
 }
 
-void WorkerThread::Start() {
-    if (state != RUNNING) {
+bool WorkerThread::Start() {
+    bool started = false;
+    if (state == NOT_STARTED) {
         std::unique_lock<std::mutex> lock(queueMutex);
         state = RUNNING;
         worker = std::thread([this] () -> void { this->Run();});
+        started = true;
     }
+
+    return started;
 }
 
 void WorkerThread::Join() {

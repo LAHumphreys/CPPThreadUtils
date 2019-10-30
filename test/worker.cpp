@@ -1,8 +1,11 @@
 #include <WorkerThread.h>
 #include <util_time.h>
 #include <gtest/gtest.h>
+#include <chrono>
+
 
 using namespace nstimestamp;
+using namespace std::chrono_literals;
 
 TEST(TWorker,PostSingleTask) {
     WorkerThread worker;
@@ -182,6 +185,60 @@ TEST(TWorker, WaitForTask) {
     ASSERT_NE(write_id, this_thread);
 }
 
+// The state model currently can't handle a second start
+TEST(TWorker, NoRestart_WhilstRunning) {
+    std::promise<bool> finishFlag, startFlag;
+    auto finishFlag_future = finishFlag.get_future();
+    auto startFlag_future = startFlag.get_future();
+
+    WorkerThread worker;
+    ASSERT_TRUE(worker.Start());
+
+    // Wait for the worker to be in the middle of doing some work
+    worker.PostTask([&] () -> void {
+        startFlag.set_value(true);
+        ASSERT_TRUE(finishFlag_future.get());
+    });
+    ASSERT_TRUE(startFlag_future.get());
+
+    // No restart whilst we're running
+    ASSERT_FALSE(worker.Start());
+
+    // release the worker
+    finishFlag.set_value(true);
+}
+
+TEST(TWorker, NoRestart_WhilstSleeping) {
+    WorkerThread worker;
+    ASSERT_TRUE(worker.Start());
+
+    // Flush it into a sleeping state
+    worker.DoTask([] () -> void { });
+
+    // This is a little in-precise, since technically there's a race condition here. If the
+    // worker immediately gets shelved by the scheduler then it is possible it doesn't fall
+    // all the way back to sleep before we continue. Give it the best possible chance.
+    std::this_thread::yield();
+    std::this_thread::sleep_for(10us);
+    std::this_thread::yield();
+
+    ASSERT_FALSE(worker.Start());
+
+}
+
+TEST(TWorker, NoRestart_AfterAbort) {
+    WorkerThread worker;
+    ASSERT_TRUE(worker.Start());
+
+    // Flush it into a sleeping state
+    worker.DoTask([] () -> void { });
+
+    worker.Abort();
+
+    ASSERT_FALSE(worker.Start());
+
+}
+
 struct Msg {
     Time t;
     std::string message;
@@ -348,12 +405,12 @@ TEST(TSubsriberWorker, SliceSize) {
                 }
             };
 
-    std::function<void(Msg&)> task1 = [&f, &comms_mutex, &messages, &count1, &wait_for_complete, &toGet]
+    std::function<void(Msg&)> task1 = [&f, &count1, &wait_for_complete, &toGet]
                  (Msg& m) -> void {
                      f(count1, m,wait_for_complete,toGet,"ONE");
                  };
 
-    std::function<void(Msg&)> task2 = [&f, &comms_mutex, &messages, &count2, &wait_for_complete, &toGet]
+    std::function<void(Msg&)> task2 = [&f, &count2, &wait_for_complete, &toGet]
                  (Msg& m) -> void {
                      f(count2, m,wait_for_complete,toGet,"TWO");
                  };
