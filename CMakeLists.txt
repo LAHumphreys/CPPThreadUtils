@@ -27,7 +27,7 @@ add_library(ThreadComms STATIC
     include/PipeSubscriber.hpp
     include/WorkerThread.h
     src/WorkerThread.cpp
-)
+        src/AggUpdate.cpp)
 
 target_link_libraries(ThreadComms PUBLIC
     Threads::Threads

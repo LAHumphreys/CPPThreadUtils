@@ -13,20 +13,7 @@ enum class AggUpdateType: char {
     NONE ='O',
 };
 
-std::ostream& operator<<(std::ostream& os, const AggUpdateType& up) {
-    switch (up) {
-        case AggUpdateType::NEW:
-            os << "AggUpdateType::NEW";
-            break;
-        case AggUpdateType::UPDATE:
-            os << "AggUpdateType::UPDATE";
-            break;
-        default:
-            os << "AggUpdateType::UNKNOWN";
-            break;
-    }
-    return os;
-}
+std::ostream& operator<<(std::ostream& os, const AggUpdateType& up);
 
 template<class T>
 struct AggUpdate {
