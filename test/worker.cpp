@@ -2,6 +2,7 @@
 #include <util_time.h>
 #include <gtest/gtest.h>
 #include <chrono>
+#include <AggPipePub.h>
 
 
 using namespace nstimestamp;
@@ -316,7 +317,9 @@ TEST(TWorker, OnThread) {
 struct Msg {
     Time t;
     std::string message;
+    std::string id;
 };
+
 
 void MessagesMatch(const std::vector<Msg>& sent,
                    const std::vector<Msg>& got)
@@ -329,6 +332,7 @@ void MessagesMatch(const std::vector<Msg>& sent,
         const Msg& recvd = got[i];
         ASSERT_EQ(msg.message, recvd.message);
         ASSERT_EQ(msg.t.DiffUSecs(recvd.t), 0);
+        ASSERT_EQ(msg.id, recvd.id);
     }
 }
 
@@ -361,6 +365,48 @@ TEST(TSubsriberWorker, SingleClient) {
 
     for (Msg& m: toSend) {
         publisher.Publish(m);
+    }
+
+    wait_for_complete.wait(lock);
+
+    ASSERT_NO_FATAL_FAILURE(MessagesMatch(toSend,messages));
+}
+
+TEST(TSubsriberWorker, AggClient) {
+    constexpr auto NoDupes =
+        AggPipePub_Config::AggPipePubUpdateMode::NO_DUPLICATE_CHECKING;
+    using Publisher = AggPipePub<Msg, NoDupes>;
+    Publisher publisher;
+    WorkerThread worker;
+    std::vector<Msg> messages;
+    std::mutex  comms_mutex;
+    std::condition_variable wait_for_complete;
+
+    std::vector<Msg> toSend {
+            {Time(), "Hello", "first"},
+            {Time(), "World!", "second"}
+    };
+
+    std::function<void (Publisher::Upd&)> push =
+            [&comms_mutex, &wait_for_complete, &toSend, &messages](Publisher::Upd& m) -> void {
+                messages.push_back(*m.data);
+                if ( messages.size() == toSend.size()) {
+                    std::unique_lock<std::mutex> lock(comms_mutex);
+                    wait_for_complete.notify_all();
+                }
+            };
+
+    worker.Start();
+
+    auto client = publisher.NewClient(1024);
+
+    worker.ConsumeUpdates(client, push);
+
+    std::unique_lock<std::mutex> lock(comms_mutex);
+
+    for (Msg& m: toSend) {
+        auto update = std::make_shared<Msg>(m);
+        publisher.Update(update);
     }
 
     wait_for_complete.wait(lock);

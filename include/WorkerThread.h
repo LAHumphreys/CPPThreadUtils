@@ -80,12 +80,18 @@ public:
      *                       event loop, and other tasks will be serviced before
      *                       consumption is resumed.
      */
-    template<class Msg>
+    template<class Msg, class Publisher=PipePublisher<Msg>>
     void ConsumeUpdates(
-        PipePublisher<Msg>& publisher,
+        Publisher& publisher,
         const std::function<void (Msg& m)>& task,
         size_t maxQueueSize = 1000000,
         size_t maxSlizeSize = 100);
+
+    template<class Msg>
+    void ConsumeUpdates(
+            std::shared_ptr<PipeSubscriber<Msg>> client,
+            const std::function<void (Msg& m)>& task,
+            size_t maxSlizeSize = 100);
 
     /**
      * Check if this function was invoked on the actual thread
@@ -185,9 +191,9 @@ private:
     std::vector<std::shared_ptr<void>> clients;
 };
 
-template<class Msg>
+template<class Msg, class Publisher>
 inline void WorkerThread::ConsumeUpdates(
-    PipePublisher<Msg>& publisher,
+    Publisher& publisher,
     const std::function<void (Msg& m)>& task,
     size_t maxQueueSize,
     size_t maxSlizeSize)
@@ -205,6 +211,26 @@ inline void WorkerThread::ConsumeUpdates(
     };
 
     this->DoTask(initializer);
+}
+
+template<class Msg>
+void WorkerThread::ConsumeUpdates(std::shared_ptr<PipeSubscriber<Msg>> client,
+                                  const std::function<void(Msg&)>& task,
+                                  size_t maxSlizeSize)
+{
+    /**
+     * We should hve been on the worker thread to initialise the client.
+     *
+     * Given we are not - it is the caller's responsibility to ensure that
+     * this is safe.
+     */
+    auto initializer = [client, task, maxSlizeSize, this] () -> void {
+        clients.push_back(client);
+        HandleUpdates(*client,task,maxSlizeSize);
+    };
+
+    this->DoTask(initializer);
+
 }
 
 template<class Msg>
@@ -229,5 +255,6 @@ inline void WorkerThread::HandleUpdates(
     });
 
 }
+
 
 #endif /* DEV_TOOLS_CPP_LIBRARIES_LIBTHREADCOMMS_WORKERTHREAD_H_ */
