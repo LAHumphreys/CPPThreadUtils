@@ -21,6 +21,24 @@ typename AggPipePub<Message, updateMode>::ClientRef
     return pub_.template NewClient<Client>(max, std::move(initialData));
 }
 
+template<class Message, AggPipePub_Config::AggPipePubUpdateMode updateMode>
+typename AggPipePub<Message, updateMode>::ClientRef
+    AggPipePub<Message, updateMode>::NewClient(const size_t& max,
+                                               const AggPipePub::Filter& filter)
+{
+    std::vector<Upd> initialData;
+    dataStore.WithData([&] (auto& data) -> void {
+        initialData.reserve(data.size());
+        for ( const auto& pair: data) {
+            if (filter(*pair.second)) {
+                initialData.push_back(ManufactureNewUpdate(pair.second));
+            }
+        }
+    });
+
+    return pub_.template NewClient<Client>(max, std::move(initialData));
+}
+
 template<class Message,
         AggPipePub_Config::AggPipePubUpdateMode updateMode>
 void AggPipePub<Message,updateMode>::Update(MsgRef m) {

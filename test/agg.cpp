@@ -92,6 +92,8 @@ void CheckClient(ClientRef client, ExpUpds& exp) {
     Upds got;
     ASSERT_NO_FATAL_FAILURE(GetMessages(exp.size(), client, got));
     ASSERT_NO_FATAL_FAILURE(MessagesMatch(exp, got));
+    MsgAgg::Upd upd;
+    ASSERT_FALSE(client->GetNextMessage(upd));
 }
 
 void PublishAndCheck (Msgs& toSend, ExpUpds& exp) {
@@ -256,7 +258,45 @@ TEST(TAggPuplisher,LateSubscriber) {
     ClientRef lateClient = pub.NewClient(1024);
     CheckClient(lateClient, lateUpdates);
 }
+TEST(TAggPuplisher,FilteredLateSubscriber) {
+    Msgs toSend {
+            Msg{"Hello World!", 0},
+            Msg{"A new message", 1},
+            Msg{"Hello World!", 0},
+            Msg{"Yet another message", 2},
+            Msg{"Hello New World!", 0},
+            Msg{"Yet another message", 3}
+    };
 
+    ExpUpds exp {
+            {toSend[0], AggUpdateType::NEW},
+            {toSend[1], AggUpdateType::NEW},
+            // Update [2] is skipped, as there is no material change
+            {toSend[3], AggUpdateType::NEW},
+            {toSend[4], AggUpdateType::UPDATE},
+            {toSend[5], AggUpdateType::NEW},
+    };
+
+
+    MsgAgg pub;
+    ClientRef client = pub.NewClient(1024);
+
+    Publish(pub, toSend);
+    CheckClient(client, exp);
+
+    ExpUpds lateUpdates {
+            {toSend[4], AggUpdateType::NEW},
+            {toSend[1], AggUpdateType::NEW},
+    };
+
+
+    const auto filter = [] (const WrappedMsg& msg) -> bool {
+        return msg._id < 2;
+    };
+
+    ClientRef lateClient = pub.NewClient(1024, filter);
+    CheckClient(lateClient, lateUpdates);
+}
 /*
  * If when the data is replayed nothing has changed - then no updates are
  * pushed to the subscriber

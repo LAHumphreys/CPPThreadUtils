@@ -118,6 +118,9 @@ public:
     //
     // NOTE: See note on threading restrctions documented on PipeSubscriber.
     std::shared_ptr<PipeSubscriber<Upd>> NewClient(const size_t& maxQueueSize);
+    using Filter = std::function<bool (const Message&)>;
+    std::shared_ptr<PipeSubscriber<Upd>> NewClient(const size_t& maxQueueSize,
+                                                   const Filter& filter);
 
 private:
     static constexpr bool diffUpdates =
