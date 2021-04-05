@@ -38,6 +38,9 @@ using Msgs = std::vector<Msg>;
 using MsgAgg = AggPipePub<WrappedMsg>;
 using Upds = std::vector<MsgAgg::Upd>;
 
+using MsgRepAgg = AggPipePub<WrappedMsg,
+                  AggPipePub_Config::AggPipePubUpdateMode::REPLACE_DELETE_MODS>;
+
 struct ExpUpd {
     Msg           m;
     AggUpdateType updateType = AggUpdateType::NONE;
@@ -60,17 +63,21 @@ void MessagesMatch(ExpUpds& exp, Upds& got)
     }
 }
 
-void Publish(MsgAgg& pub, const Msg& m) {
+template <class Pub>
+void Publish(Pub& pub, const Msg& m) {
     auto cpy = std::make_shared<WrappedMsg>(m.message, m._id);
     pub.Update(std::move(cpy));
 }
-void Publish(MsgAgg& pub, const Msgs& msgs) {
+
+template <class Pub>
+void Publish(Pub& pub, const Msgs& msgs) {
     for (const Msg& m: msgs) {
         Publish(pub, m);
     }
 }
 
-void ResetMessages(MsgAgg& pub, Msgs& toReplay) {
+template <class Pub>
+void ResetMessages(Pub& pub, Msgs& toReplay) {
     std::vector<std::shared_ptr<const WrappedMsg>> msgs;
     msgs.reserve(toReplay.size());
     for (const Msg& m: toReplay) {
@@ -80,7 +87,8 @@ void ResetMessages(MsgAgg& pub, Msgs& toReplay) {
     pub.ResetMessages(msgs);
 }
 
-void GetMessages(const size_t toGet, ClientRef& cli, Upds& dest) {
+template <class Cli>
+void GetMessages(const size_t toGet, Cli& cli, Upds& dest) {
     MsgAgg::Upd upd;
     for (size_t i = 0; i < toGet; ++i) {
         ASSERT_TRUE(cli->GetNextMessage(upd));
@@ -88,7 +96,8 @@ void GetMessages(const size_t toGet, ClientRef& cli, Upds& dest) {
     }
 }
 
-void CheckClient(ClientRef client, ExpUpds& exp) {
+template <class Cli>
+void CheckClient(Cli client, ExpUpds& exp) {
     Upds got;
     ASSERT_NO_FATAL_FAILURE(GetMessages(exp.size(), client, got));
     ASSERT_NO_FATAL_FAILURE(MessagesMatch(exp, got));
@@ -96,17 +105,19 @@ void CheckClient(ClientRef client, ExpUpds& exp) {
     ASSERT_FALSE(client->GetNextMessage(upd));
 }
 
+template<class Pub = MsgAgg>
 void PublishAndCheck (Msgs& toSend, ExpUpds& exp) {
-    MsgAgg pub;
-    ClientRef client = pub.NewClient(1024);
+    Pub pub;
+    auto client = pub.NewClient(1024);
 
     Publish(pub, toSend);
     CheckClient(client, exp);
 }
 
+template<class Pub = MsgAgg>
 void PublishReplayAndCheck (Msgs& toSend, Msgs& toReplay, ExpUpds& exp, ExpUpds& expReplay) {
-    MsgAgg pub;
-    ClientRef client = pub.NewClient(1024);
+    Pub pub;
+    auto client = pub.NewClient(1024);
 
     Publish(pub, toSend);
     ASSERT_NO_FATAL_FAILURE(CheckClient(client, exp));
@@ -156,6 +167,28 @@ TEST(TAggPuplisher,UpdatedItems) {
         {toSend[3], AggUpdateType::NEW}
     };
     PublishAndCheck(toSend, exp);
+}
+
+/*
+ * In delete / replace mode - we manufacture two updates (first deleting the
+ * old value, and then replacing it with a NEW)
+ */
+TEST(TAggPuplisher,ReplaceItems) {
+    Msgs toSend {
+        Msg{"Hello World!", 0},
+        Msg{"A new message", 1},
+        Msg{"Hello New World!", 0},
+        Msg{"Yet another message", 2}
+    };
+
+    ExpUpds exp {
+        {toSend[0], AggUpdateType::NEW},
+        {toSend[1], AggUpdateType::NEW},
+        {toSend[0], AggUpdateType::DELETE},
+        {toSend[2], AggUpdateType::NEW},
+        {toSend[3], AggUpdateType::NEW}
+    };
+    PublishAndCheck<MsgRepAgg>(toSend, exp);
 }
 
 /*
@@ -351,6 +384,39 @@ TEST(TAggPuplisher_Replay,InsertsAndUpdates) {
             {toReplay[4], AggUpdateType::NEW}
     };
     PublishReplayAndCheck(toSend, toReplay, exp, expReplay);
+}
+
+/*
+ * If in delete / replace mode DELETES and new inserts are sent rather than a
+ * single update.
+ */
+TEST(TAggPuplisher_Replay,InsertsAndReplaces) {
+    Msgs toSend {
+            Msg{"A new message", 1},
+            Msg{"Yet another message", 2},
+            Msg{"Yet another message", 3}
+    };
+
+    ExpUpds exp {
+            {toSend[0], AggUpdateType::NEW},
+            {toSend[1], AggUpdateType::NEW},
+            {toSend[2], AggUpdateType::NEW},
+    };
+
+    Msgs toReplay {
+            Msg{"Hello World!", 0},
+            Msg{"A new message", 1},
+            Msg{"UPDATED!", 2},
+            Msg{"Yet another message", 3},
+            Msg{"NEW!", 4}
+    };
+    ExpUpds expReplay {
+            {toReplay[0], AggUpdateType::NEW},
+            {toSend[1], AggUpdateType::DELETE},
+            {toReplay[2], AggUpdateType::NEW},
+            {toReplay[4], AggUpdateType::NEW}
+    };
+    PublishReplayAndCheck<MsgRepAgg>(toSend, toReplay, exp, expReplay);
 }
 
 /*

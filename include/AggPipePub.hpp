@@ -42,8 +42,7 @@ typename AggPipePub<Message, updateMode>::ClientRef
 template<class Message,
         AggPipePub_Config::AggPipePubUpdateMode updateMode>
 void AggPipePub<Message,updateMode>::Update(MsgRef m) {
-    auto upd = ManufactureUpdate(std::move(m));
-    if (upd.updateType != AggUpdateType::NONE) {
+    for (Upd& upd: ManufactureUpdate(std::move(m))) {
         pub_.Publish(std::move(upd));
     }
 }
@@ -68,7 +67,12 @@ void AggPipePub<Message, updateMode>::ResetMessages(const std::vector<MsgRef>& m
 
             if (eid == nid) {
                 if (IsUpdated(*existing, *newEl)) {
-                    pub_.Publish({newEl, AggUpdateType::UPDATE});
+                    if (replace_mods) {
+                        pub_.Publish({existing, AggUpdateType::DELETE});
+                        pub_.Publish({newEl, AggUpdateType::NEW});
+                    } else {
+                        pub_.Publish({newEl, AggUpdateType::UPDATE});
+                    }
                 }
                 ++existingIt;
                 ++newIt;
@@ -98,26 +102,38 @@ void AggPipePub<Message, updateMode>::ResetMessages(const std::vector<MsgRef>& m
 
 template<class Message,
         AggPipePub_Config::AggPipePubUpdateMode updateMode>
-typename AggPipePub<Message, updateMode>::Upd
+std::vector<typename AggPipePub<Message, updateMode>::Upd>
     AggPipePub<Message,updateMode>::ManufactureUpdate(AggPipePub::MsgRef m)
 {
     AggUpdateType updType = AggUpdateType::NEW;
     const auto id = GetId(*m);
+    MsgRef oldItem = nullptr;
 
-    dataStore.WithData([&] (auto& data) -> void {
+    dataStore.WithData([&] (typename LockedData::DataType& data) -> void {
         auto it = data.find(id);
         if (it == data.end()) {
             data[id] = m;
         } else if (IsUpdated(*it->second, *m)) {
+            if (replace_mods) {
+                oldItem = it->second;
+            } else {
+                updType = AggUpdateType::UPDATE;
+            }
             data.erase(it);
-            updType = AggUpdateType::UPDATE;
             data[id] = m;
         } else {
             updType = AggUpdateType::NONE;
         }
     });
 
-    return Upd{std::move(m), updType};
+    if (oldItem.get() != nullptr) {
+        return { Upd{std::move(oldItem), AggUpdateType::DELETE},
+                 Upd{std::move(m), updType} };
+    } else if (updType != AggUpdateType::NONE) {
+        return { Upd{std::move(m), updType} };
+    } else {
+        return {};
+    }
 }
 
 template<class Message,

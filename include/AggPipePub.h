@@ -13,7 +13,8 @@
 namespace AggPipePub_Config {
     enum class AggPipePubUpdateMode {
         SKIP_DUPLICATES,
-        NO_DUPLICATE_CHECKING
+        NO_DUPLICATE_CHECKING,
+        REPLACE_DELETE_MODS,
     };
 }
 
@@ -125,6 +126,8 @@ public:
 private:
     static constexpr bool diffUpdates =
             (updateMode != AggPipePub_Config::AggPipePubUpdateMode::NO_DUPLICATE_CHECKING);
+    static constexpr bool replace_mods =
+            (updateMode == AggPipePub_Config::AggPipePubUpdateMode::REPLACE_DELETE_MODS);
 
     using Adapter = AggPipePub_Adaption::MessageAdapter<Message, diffUpdates>;
     using IdType = typename Adapter::GetAggIdValueType;
@@ -152,7 +155,7 @@ private:
         DataType data;
     };
     LockedData dataStore;
-    Upd ManufactureUpdate(MsgRef msg);
+    std::vector<Upd> ManufactureUpdate(MsgRef msg);
     Upd ManufactureNewUpdate(MsgRef msg);
     PipePublisher<Upd> pub_;
 };
